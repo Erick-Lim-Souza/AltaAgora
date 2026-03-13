@@ -18,9 +18,10 @@ if (!headers_sent()) {
     header('Permissions-Policy: geolocation=(), camera=(), microphone=()');
     header("Content-Security-Policy: default-src 'self'; "
          . "img-src 'self' https: data:; "
-         . "style-src 'self' https://fonts.googleapis.com 'unsafe-inline'; "
-         . "font-src https://fonts.gstatic.com; "
-         . "script-src 'self' 'unsafe-inline';");
+         . "style-src 'self' https://fonts.googleapis.com https://use.typekit.net 'unsafe-inline'; "
+         . "font-src https://fonts.gstatic.com https://use.typekit.net data:; "
+         . "script-src 'self' 'unsafe-inline'; "
+         . "connect-src 'self';");
 }
 
 // ── API Key via variável de ambiente (Render Dashboard) ─
