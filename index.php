@@ -15,6 +15,21 @@ $secondsLeft    = getSecondsUntilRefresh();
 $topStock  = $hasError ? null : $topStocks[0];
 $avgChange = $hasError ? 0 : array_sum(array_column($topStocks, 'change_percent')) / max(1, count($topStocks));
 $totalVol  = $hasError ? 0 : array_sum(array_column($topStocks, 'volume'));
+
+// Gerador de minigráfico (Sparkline) procedural para portfólio
+function generateSparkline($seed, $isPositive) {
+    srand(crc32($seed) + date('z')); // Muda o desenho 1x por dia
+    $points = []; $y = 12;
+    for ($x = 0; $x <= 60; $x += 10) {
+        $points[] = "$x,$y";
+        $y += rand(-6, 6);
+        $y = max(2, min(22, $y)); // Mantém dentro dos limites do SVG
+    }
+    // Garante que a ponta final aponte pra cima ou pra baixo dependendo do fechamento
+    $yLast = $isPositive ? rand(2, 8) : rand(16, 22);
+    $points[count($points)-1] = "60,$yLast";
+    return implode(" ", $points);
+}
 ?>
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -24,13 +39,17 @@ $totalVol  = $hasError ? 0 : array_sum(array_column($topStocks, 'volume'));
     <meta name="description" content="AltaAgora — Ações com maiores altas do pregão B3 em tempo real.">
     <meta name="robots" content="noindex, nofollow">
     <title>AltaAgora · Ações em Alta — Pregão B3</title>
+    
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#050810">
+    <link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23050810'/%3E%3Ctext x='4' y='23' font-family='monospace' font-size='18' font-weight='700' fill='%2300ffa3'%3EA%3C/text%3E%3C/svg%3E">
+    
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23050810'/%3E%3Ctext x='4' y='23' font-family='monospace' font-size='18' font-weight='700' fill='%2300ffa3'%3EA%3C/text%3E%3C/svg%3E">
     <link rel="stylesheet" href="style.css">
     
     <style>
-        /* ── Estilos Exclusivos do Rodapé Premium ── */
         .footer-premium { border-top: 1px solid var(--border); background: var(--bg-card); padding: 48px 5% 24px; margin-top: 40px; font-size: 0.8rem; position: relative; z-index: 10; }
         .footer-premium-top { display: flex; flex-wrap: wrap; gap: 40px; justify-content: space-between; margin-bottom: 40px; max-width: 1200px; margin-inline: auto; }
         .footer-brand-col { flex: 1; min-width: 280px; max-width: 450px; }
@@ -46,10 +65,7 @@ $totalVol  = $hasError ? 0 : array_sum(array_column($topStocks, 'volume'));
         .footer-disclaimer strong { color: var(--text-mid); }
         .footer-credits-wrap { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 16px; color: var(--text-mid); font-size: 0.75rem; }
         .footer-credits-wrap strong { color: var(--text-hi); }
-        @media (max-width: 768px) {
-            .footer-premium-top { flex-direction: column; gap: 32px; }
-            .footer-credits-wrap { flex-direction: column; text-align: center; justify-content: center; }
-        }
+        @media (max-width: 768px) { .footer-premium-top { flex-direction: column; gap: 32px; } .footer-credits-wrap { flex-direction: column; text-align: center; justify-content: center; } }
     </style>
 </head>
 <body>
@@ -87,23 +103,23 @@ $totalVol  = $hasError ? 0 : array_sum(array_column($topStocks, 'volume'));
         </div>
 
         <div class="topbar-right">
+            <div class="search-wrap">
+                <span style="color:var(--text-mid); margin-right:6px;">🔍</span>
+                <input type="text" id="searchInput" class="search-input" placeholder="Filtrar ticker..." autocomplete="off">
+            </div>
+
             <span class="live-dot" title="Dados ao vivo"></span>
             <span class="update-time mono"><?= $lastUpdate ?></span>
 
             <div class="countdown-wrap" title="Próxima atualização da tela">
                 <span class="countdown-label">REFRESH</span>
-                <span class="countdown-timer mono" id="countdown"
-                      data-seconds="<?= $secondsLeft ?>">
+                <span class="countdown-timer mono" id="countdown" data-seconds="<?= $secondsLeft ?>">
                     <?= sprintf('%02d:%02d', intdiv($secondsLeft, 60), $secondsLeft % 60) ?>
                 </span>
                 <div class="countdown-bar">
-                    <div class="countdown-bar-fill" id="countdown-bar"
-                         style="--pct:<?= $secondsLeft > 0 ? round(($secondsLeft / PAGE_REFRESH) * 100) : 0 ?>%">
-                    </div>
+                    <div class="countdown-bar-fill" id="countdown-bar" style="--pct:<?= $secondsLeft > 0 ? round(($secondsLeft / PAGE_REFRESH) * 100) : 0 ?>%"></div>
                 </div>
             </div>
-
-            <span class="session-tag">PREGÃO B3</span>
         </div>
     </header>
 
@@ -126,8 +142,9 @@ $totalVol  = $hasError ? 0 : array_sum(array_column($topStocks, 'volume'));
                 <p class="page-subtitle">
                     Top gainers do pregão atual &middot; Bolsa B3 · São Paulo<br>
                     <span style="color:var(--text-lo); font-size: 0.8em; margin-top: 4px; display: inline-block;">
-                        Atualização do Cache: Índices (<?= CACHE_TIME_HG / 60 ?>min) · Ações B3 (<?= CACHE_TIME_BRAPI / 60 ?>min)
+                        Atualização: Índices (<?= CACHE_TIME_HG / 60 ?>min) · Ações (<?= CACHE_TIME_BRAPI / 60 ?>min)
                     </span>
+                    <button id="notifyBtn" class="filter-btn" style="margin-left:12px;">🔔 Alertas de Disparo</button>
                 </p>
             </div>
             <div class="title-line"></div>
@@ -138,7 +155,6 @@ $totalVol  = $hasError ? 0 : array_sum(array_column($topStocks, 'volume'));
             <span class="alert-icon">⚠</span>
             <p>Não foi possível carregar os dados das ações na B3. Verifique sua chave da Brapi ou tente novamente em instantes.</p>
         </div>
-
         <?php elseif (!$hasError): ?>
 
         <?php
@@ -153,19 +169,16 @@ $totalVol  = $hasError ? 0 : array_sum(array_column($topStocks, 'volume'));
                 <div class="stat-var <?= $topVar['class'] ?> mono"><?= $topVar['symbol'] ?>&thinsp;<?= $topVar['value'] ?>%</div>
                 <div class="stat-name"><?= $topStock['name'] ?></div>
             </div>
-
             <div class="stat-card" style="--delay:.07s">
                 <div class="stat-label">~ MÉDIA DO GRUPO</div>
                 <div class="stat-big <?= $avgVar['class'] ?> mono"><?= $avgVar['symbol'] ?><?= $avgVar['value'] ?>%</div>
                 <div class="stat-sub">top <?= count($topStocks) ?> ações</div>
             </div>
-
             <div class="stat-card" style="--delay:.14s">
                 <div class="stat-label"># VOLUME TOTAL</div>
                 <div class="stat-big mono"><?= formatVolume($totalVol) ?></div>
                 <div class="stat-sub">ações negociadas</div>
             </div>
-
             <div class="stat-card stat-card--countdown" style="--delay:.21s">
                 <div class="stat-label">↻ PRÓX. ATUALIZAÇÃO</div>
                 <div class="stat-big mono" id="countdown-card">
@@ -174,12 +187,8 @@ $totalVol  = $hasError ? 0 : array_sum(array_column($topStocks, 'volume'));
                 <div class="stat-sub">segundos restantes</div>
                 <div class="progress-ring-wrap">
                     <svg class="progress-ring" viewBox="0 0 44 44">
-                        <circle class="ring-bg"   cx="22" cy="22" r="18" />
-                        <circle class="ring-fill" cx="22" cy="22" r="18"
-                            id="ring-fill"
-                            stroke-dasharray="113.1"
-                            stroke-dashoffset="<?= 113.1 - (113.1 * ($secondsLeft / PAGE_REFRESH)) ?>"
-                        />
+                        <circle class="ring-bg" cx="22" cy="22" r="18" />
+                        <circle class="ring-fill" cx="22" cy="22" r="18" id="ring-fill" stroke-dasharray="113.1" stroke-dashoffset="<?= 113.1 - (113.1 * ($secondsLeft / PAGE_REFRESH)) ?>" />
                     </svg>
                 </div>
             </div>
@@ -191,7 +200,6 @@ $totalVol  = $hasError ? 0 : array_sum(array_column($topStocks, 'volume'));
                 <h3 class="section-label" style="margin-bottom: 0;">// índices do mercado</h3>
                 <span style="font-size: 0.6rem; color: var(--text-lo); text-transform: uppercase; letter-spacing: 0.1em;">HG Brasil Feed</span>
             </div>
-            
             <div class="indices-grid">
                 <?php foreach ($indices as $idx => $d):
                     $v = formatVariation((float)($d['variation'] ?? 0));
@@ -207,20 +215,25 @@ $totalVol  = $hasError ? 0 : array_sum(array_column($topStocks, 'volume'));
         <?php endif; ?>
 
         <section class="table-section">
-            <div class="table-header">
+            <div class="table-header" style="flex-wrap: wrap; gap: 16px;">
                 <h2 class="table-title">TOP <?= count($topStocks) ?> &mdash; Maiores Altas</h2>
-                <div class="table-header-right">
-                    <span class="table-badge">B3 &middot; Brapi Feed</span>
+                
+                <div class="table-controls">
+                    <span style="font-size: 0.7rem; color: var(--text-mid);">Ordenar por:</span>
+                    <button class="filter-btn active" data-sort="rank">Variação %</button>
+                    <button class="filter-btn" data-sort="price">Preço R$</button>
+                    <button class="filter-btn" data-sort="vol">Volume</button>
                 </div>
             </div>
 
             <div class="table-wrap">
-                <table class="data-table">
+                <table class="data-table" id="stocksTable">
                     <thead>
                         <tr>
                             <th>#</th>
                             <th>Ativo</th>
                             <th>Empresa</th>
+                            <th class="col-chart">Trend</th>
                             <th>Preço</th>
                             <th>Var R$</th>
                             <th>Var %</th>
@@ -234,11 +247,17 @@ $totalVol  = $hasError ? 0 : array_sum(array_column($topStocks, 'volume'));
                     foreach ($topStocks as $i => $stock):
                         $var    = formatVariation($stock['change_percent']);
                         $barPct = round(($stock['change_percent'] / $maxPct) * 100);
+                        $isPos  = $stock['change_percent'] >= 0;
                     ?>
-                        <tr class="table-row" style="--row-delay:<?= $i * 0.035 ?>s">
-                            <td>
-                                <span class="rank rank-<?= $i < 3 ? ($i + 1) : 'n' ?>"><?= $i + 1 ?></span>
-                            </td>
+                        <tr class="table-row" 
+                            data-symbol="<?= strtolower($stock['symbol']) ?>" 
+                            data-price="<?= $stock['price'] ?>" 
+                            data-vol="<?= $stock['volume'] ?>" 
+                            data-rank="<?= $i ?>"
+                            data-pct="<?= $stock['change_percent'] ?>"
+                            data-logo="<?= $stock['logo'] ?>"
+                            style="--row-delay:<?= $i * 0.035 ?>s">
+                            <td><span class="rank rank-<?= $i < 3 ? ($i + 1) : 'n' ?>"><?= $i + 1 ?></span></td>
                             <td>
                                 <div class="asset-cell">
                                     <?php if ($stock['logo']): ?>
@@ -250,18 +269,19 @@ $totalVol  = $hasError ? 0 : array_sum(array_column($topStocks, 'volume'));
                                 </div>
                             </td>
                             <td class="col-company"><?= $stock['name'] ?></td>
+                            
+                            <td class="col-chart">
+                                <svg class="sparkline-svg" viewBox="0 0 60 24">
+                                    <polyline class="sparkline-line <?= $var['class'] ?>" points="<?= generateSparkline($stock['symbol'], $isPos) ?>" />
+                                </svg>
+                            </td>
+
                             <td class="mono col-price"><?= formatMoney($stock['price']) ?></td>
-                            <td class="mono <?= $var['class'] ?>">
-                                <?= ($stock['change_price'] >= 0 ? '+' : '') ?><?= formatMoney($stock['change_price']) ?>
-                            </td>
-                            <td>
-                                <span class="pct-pill <?= $var['class'] ?>"><?= $var['symbol'] ?>&thinsp;<?= $var['value'] ?>%</span>
-                            </td>
+                            <td class="mono <?= $var['class'] ?>"><?= ($stock['change_price'] >= 0 ? '+' : '') ?><?= formatMoney($stock['change_price']) ?></td>
+                            <td><span class="pct-pill <?= $var['class'] ?>"><?= $var['symbol'] ?>&thinsp;<?= $var['value'] ?>%</span></td>
                             <td class="mono col-vol"><?= formatVolume($stock['volume']) ?></td>
                             <td class="col-bar">
-                                <div class="bar-track">
-                                    <div class="bar-fill <?= $var['class'] ?>" style="--w:<?= $barPct ?>%"></div>
-                                </div>
+                                <div class="bar-track"><div class="bar-fill <?= $var['class'] ?>" style="--w:<?= $barPct ?>%"></div></div>
                                 <span class="bar-pct"><?= $barPct ?>%</span>
                             </td>
                         </tr>
@@ -279,34 +299,27 @@ $totalVol  = $hasError ? 0 : array_sum(array_column($topStocks, 'volume'));
         <div class="footer-premium-top">
             <div class="footer-brand-col">
                 <span class="logo">Alta<span class="logo-accent">Agora</span><span class="logo-dot">.</span></span>
-                <p class="footer-desc">
-                    Terminal financeiro de alta performance desenvolvido para oferecer uma visão limpa, rápida e direta das maiores movimentações da bolsa brasileira. Desenvolvido com arquitetura de baixo consumo e estética de terminal tech.
-                </p>
+                <p class="footer-desc">Terminal financeiro de alta performance desenvolvido para oferecer uma visão limpa, rápida e direta das maiores movimentações da bolsa brasileira.</p>
             </div>
-            
             <div class="footer-links-col">
                 <h4>Fontes de Dados</h4>
                 <ul>
                     <li><a href="https://brapi.dev" target="_blank" rel="noopener">Brapi API (Ações)</a></li>
                     <li><a href="https://hgbrasil.com" target="_blank" rel="noopener">HG Brasil (Índices)</a></li>
-                    <li><a href="https://www.b3.com.br" target="_blank" rel="noopener">B3 - Brasil Bolsa Balcão</a></li>
                 </ul>
             </div>
-            
             <div class="footer-links-col">
                 <h4>Projeto</h4>
                 <ul>
                     <li><a href="https://github.com/Erick-Lim-Souza/AltaAgora" target="_blank" rel="noopener">Código Fonte (GitHub)</a></li>
-                    <li><a href="https://ericklima-dev.netlify.app/" target="_blank" rel="noopener">Desenvolvedor</a></li>
+                    <li><a href="https://linkedin.com/in/erickdelimasouza" target="_blank" rel="noopener">Desenvolvedor</a></li>
                 </ul>
             </div>
         </div>
-        
         <div class="footer-premium-bottom">
             <div class="footer-disclaimer">
-                <strong>Aviso Legal:</strong> Os dados e cotações exibidos neste portal são consumidos via APIs públicas de terceiros (Brapi e HG Brasil) e podem apresentar divergências ou atraso (delay) em relação ao pregão ao vivo da B3. O AltaAgora tem caráter estritamente informativo, educacional e de portfólio tecnológico. As informações aqui contidas <strong>não constituem</strong> recomendações de compra, venda ou estratégias de investimento. Consulte sempre um analista de valores mobiliários certificado pela CVM antes de tomar decisões financeiras.
+                <strong>Aviso Legal:</strong> Os dados e cotações exibidos neste portal são consumidos via APIs públicas de terceiros (Brapi e HG Brasil) e podem apresentar divergências ou atraso (delay). O AltaAgora tem caráter estritamente informativo. As informações aqui contidas não constituem recomendações de compra ou venda.
             </div>
-            
             <div class="footer-credits-wrap">
                 <span>&copy; <?= date('Y') ?> AltaAgora. Todos os direitos reservados.</span>
                 <span>Criado por <strong>Erick de Lima Souza</strong> &middot; Green Monster Project</span>
@@ -314,58 +327,125 @@ $totalVol  = $hasError ? 0 : array_sum(array_column($topStocks, 'volume'));
         </div>
     </footer>
 
-</div><script>
+</div>
+
+<script>
 // ═══════════════════════════════════════════════
-//  AltaAgora — Countdown + Auto-refresh
+//  1. PWA REGISTRATION
 // ═══════════════════════════════════════════════
-(function () {
-    const TOTAL        = <?= PAGE_REFRESH ?>;         // segundos totais do ciclo da página
-    let   remaining    = <?= $secondsLeft ?>;         // segundos restantes do PHP
+if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js').catch(err => console.log('SW falhou:', err));
+    });
+}
 
-    const elTopbar     = document.getElementById('countdown');
-    const elCard       = document.getElementById('countdown-card');
-    const elBar        = document.getElementById('countdown-bar');
-    const elRing       = document.getElementById('ring-fill');
-    const CIRCUMF      = 113.1; // 2 * π * 18
+// ═══════════════════════════════════════════════
+//  2. SISTEMA DE NOTIFICAÇÕES (ALERTA > 5%)
+// ═══════════════════════════════════════════════
+const notifyBtn = document.getElementById('notifyBtn');
+if (notifyBtn && "Notification" in window) {
+    if (Notification.permission === "granted") notifyBtn.style.display = 'none';
+    
+    notifyBtn.addEventListener('click', () => {
+        Notification.requestPermission().then(permission => {
+            if (permission === "granted") {
+                notifyBtn.style.display = 'none';
+                new Notification("AltaAgora Alertas", { body: "Avisaremos se alguma ação disparar mais de 5%!", icon: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23050810'/%3E%3Ctext x='4' y='23' font-family='monospace' font-size='18' font-weight='700' fill='%2300ffa3'%3EA%3C/text%3E%3C/svg%3E" });
+            }
+        });
+    });
 
-    function pad(n) { return String(n).padStart(2, '0'); }
-
-    function fmt(s) {
-        const m = Math.floor(s / 60);
-        const sec = s % 60;
-        return pad(m) + ':' + pad(sec);
+    // Checa ações em tempo real
+    if (Notification.permission === "granted") {
+        document.querySelectorAll('.table-row').forEach(row => {
+            let pct = parseFloat(row.dataset.pct);
+            let symbol = row.dataset.symbol.toUpperCase();
+            // Dispara notificação se a ação subiu mais de 5% (você pode mudar esse valor)
+            if (pct >= 5.0) {
+                // Usa sessionStorage para não floodar de notificações a cada F5
+                if (!sessionStorage.getItem('notified_' + symbol)) {
+                    new Notification("🚀 " + symbol + " Disparou!", {
+                        body: "A ação está com " + pct + "% de alta. Verifique o painel.",
+                        icon: row.dataset.logo || ""
+                    });
+                    sessionStorage.setItem('notified_' + symbol, 'true');
+                }
+            }
+        });
     }
+}
 
-    function update() {
-        if (remaining <= 0) {
-            location.reload();
-            return;
-        }
+// ═══════════════════════════════════════════════
+//  3. PESQUISA RÁPIDA (QUICK SEARCH)
+// ═══════════════════════════════════════════════
+const searchInput = document.getElementById('searchInput');
+if (searchInput) {
+    searchInput.addEventListener('input', (e) => {
+        const term = e.target.value.toLowerCase();
+        document.querySelectorAll('.table-row').forEach(row => {
+            const symbol = row.dataset.symbol;
+            if (symbol.includes(term)) {
+                row.classList.remove('hidden-row');
+            } else {
+                row.classList.add('hidden-row');
+            }
+        });
+    });
+}
 
-        const display = fmt(remaining);
-        if (elTopbar)  elTopbar.textContent  = display;
-        if (elCard)    elCard.textContent     = display;
+// ═══════════════════════════════════════════════
+//  4. ORDENAÇÃO DINÂMICA
+// ═══════════════════════════════════════════════
+const tbody = document.querySelector('#stocksTable tbody');
+const btns = document.querySelectorAll('.filter-btn[data-sort]');
 
-        const pct = Math.round((remaining / TOTAL) * 100);
-        if (elBar) elBar.style.setProperty('--pct', pct + '%');
+btns.forEach(btn => {
+    btn.addEventListener('click', () => {
+        // Remove active class
+        btns.forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
 
-        if (elRing) {
-            const offset = CIRCUMF - (CIRCUMF * (remaining / TOTAL));
-            elRing.style.strokeDashoffset = offset.toFixed(2);
-        }
+        const sortType = btn.dataset.sort;
+        const rows = Array.from(tbody.querySelectorAll('.table-row'));
 
-        const urgency = remaining <= 30;
-        [elTopbar, elCard].forEach(el => {
-            if (el) el.classList.toggle('countdown-urgent', urgency);
+        rows.sort((a, b) => {
+            let valA = parseFloat(a.dataset[sortType]);
+            let valB = parseFloat(b.dataset[sortType]);
+            
+            if (sortType === 'rank') return valA - valB; // Crescente (1, 2, 3...)
+            return valB - valA; // Decrescente para Preço e Volume
         });
 
+        // Re-apendando reordena automaticamente os nós na DOM
+        rows.forEach(row => tbody.appendChild(row));
+    });
+});
+
+// ═══════════════════════════════════════════════
+//  5. COUNTDOWN DE REFRESH
+// ═══════════════════════════════════════════════
+(function () {
+    const TOTAL = <?= PAGE_REFRESH ?>;
+    let remaining = <?= $secondsLeft ?>;
+    const elTopbar = document.getElementById('countdown'), elCard = document.getElementById('countdown-card'), elBar = document.getElementById('countdown-bar'), elRing = document.getElementById('ring-fill');
+    const CIRCUMF = 113.1;
+    function pad(n) { return String(n).padStart(2, '0'); }
+    function fmt(s) { return pad(Math.floor(s / 60)) + ':' + pad(s % 60); }
+    function update() {
+        if (remaining <= 0) { location.reload(); return; }
+        const display = fmt(remaining);
+        if (elTopbar) elTopbar.textContent = display;
+        if (elCard) elCard.textContent = display;
+        if (elBar) elBar.style.setProperty('--pct', Math.round((remaining / TOTAL) * 100) + '%');
+        if (elRing) elRing.style.strokeDashoffset = (CIRCUMF - (CIRCUMF * (remaining / TOTAL))).toFixed(2);
+        const urgency = remaining <= 30;
+        [elTopbar, elCard].forEach(el => { if (el) el.classList.toggle('countdown-urgent', urgency); });
         remaining--;
     }
-
-    update();
-    setInterval(update, 1000);
+    update(); setInterval(update, 1000);
 })();
 
+// Hover Highlights
 document.querySelectorAll('.table-row').forEach(row => {
     row.addEventListener('mouseenter', () => row.classList.add('row-hl'));
     row.addEventListener('mouseleave', () => row.classList.remove('row-hl'));
