@@ -299,7 +299,7 @@ $totalVol  = $hasError ? 0 : array_sum(array_column($topStocks, 'volume'));
                 <h4>Projeto</h4>
                 <ul>
                     <li><a href="https://github.com/Erick-Lim-Souza/AltaAgora" target="_blank" rel="noopener">Código Fonte (GitHub)</a></li>
-                    <li><a href="https://linkedin.com/in/erickdelimasouza" target="_blank" rel="noopener">Desenvolvedor</a></li>
+                    <li><a href="https://ericklima-dev.netlify.app/" target="_blank" rel="noopener">Desenvolvedor</a></li>
                 </ul>
             </div>
         </div>
