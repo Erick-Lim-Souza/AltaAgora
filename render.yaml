@@ -1,0 +1,14 @@
+# render.yaml — Configuração do serviço AltaAgora no Render
+services:
+  - type: web
+    name: altaagora
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    region: oregon          # ou frankfurt se quiser mais próximo do Brasil
+    plan: free              # troque para "starter" em produção
+    autoDeploy: true        # deploy automático a cada push no GitHub
+
+    # Variáveis de ambiente (configure também no painel do Render)
+    envVars:
+      - key: HG_API_KEY
+        sync: false         # valor definido manualmente no painel — não expõe no Git
