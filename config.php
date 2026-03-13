@@ -16,12 +16,19 @@ if (!headers_sent()) {
     header('X-XSS-Protection: 1; mode=block');
     header('Referrer-Policy: strict-origin-when-cross-origin');
     header('Permissions-Policy: geolocation=(), camera=(), microphone=()');
+
+    // font-src usa wildcard (* data:) — extensões de browser (Render dashboard,
+    // Grammarly, etc.) injetam fontes via typekit/data-uri que a CSP bloquearia.
+    // Fontes não executam código, então liberar font-src não representa risco.
     header("Content-Security-Policy: default-src 'self'; "
-         . "img-src 'self' https: data:; "
-         . "style-src 'self' https://fonts.googleapis.com https://use.typekit.net 'unsafe-inline'; "
-         . "font-src https://fonts.gstatic.com https://use.typekit.net data:; "
+         . "img-src 'self' https: data: blob:; "
+         . "style-src 'self' https: 'unsafe-inline'; "
+         . "font-src * data:; "
          . "script-src 'self' 'unsafe-inline'; "
-         . "connect-src 'self';");
+         . "connect-src 'self'; "
+         . "frame-ancestors 'none'; "
+         . "base-uri 'self'; "
+         . "form-action 'self';");
 }
 
 // ── API Key via variável de ambiente (Render Dashboard) ─
