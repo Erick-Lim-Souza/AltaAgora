@@ -1,6 +1,7 @@
 <?php
 // ═══════════════════════════════════════════════════════
 //  AltaAgora — index.php
+//  Terminal Híbrido: Brapi (Ações) + HG Brasil (Índices)
 // ═══════════════════════════════════════════════════════
 require_once 'functions.php';
 
@@ -8,11 +9,11 @@ $topStocks      = getTopGainers(15);
 $indices        = getMarketIndices();
 $lastUpdate     = date('H:i:s');
 $hasError       = empty($topStocks);
-$apiKeyMissing  = !API_KEY_SET;
+$apiKeysMissing = (!API_KEY_SET || !BRAPI_KEY_SET);
 $secondsLeft    = getSecondsUntilRefresh();
 
 $topStock  = $hasError ? null : $topStocks[0];
-$avgChange = $hasError ? 0 : array_sum(array_column($topStocks, 'change_percent')) / count($topStocks);
+$avgChange = $hasError ? 0 : array_sum(array_column($topStocks, 'change_percent')) / max(1, count($topStocks));
 $totalVol  = $hasError ? 0 : array_sum(array_column($topStocks, 'volume'));
 ?>
 <!DOCTYPE html>
@@ -27,10 +28,32 @@ $totalVol  = $hasError ? 0 : array_sum(array_column($topStocks, 'volume'));
     <link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23050810'/%3E%3Ctext x='4' y='23' font-family='monospace' font-size='18' font-weight='700' fill='%2300ffa3'%3EA%3C/text%3E%3C/svg%3E">
     <link rel="stylesheet" href="style.css">
+    
+    <style>
+        /* ── Estilos Exclusivos do Rodapé Premium ── */
+        .footer-premium { border-top: 1px solid var(--border); background: var(--bg-card); padding: 48px 5% 24px; margin-top: 40px; font-size: 0.8rem; position: relative; z-index: 10; }
+        .footer-premium-top { display: flex; flex-wrap: wrap; gap: 40px; justify-content: space-between; margin-bottom: 40px; max-width: 1200px; margin-inline: auto; }
+        .footer-brand-col { flex: 1; min-width: 280px; max-width: 450px; }
+        .footer-desc { color: var(--text-mid); margin-top: 16px; line-height: 1.6; font-size: 0.85rem; }
+        .footer-links-col { min-width: 200px; }
+        .footer-links-col h4 { color: var(--text-lo); font-family: var(--font-mono); font-size: 0.75rem; letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 20px; }
+        .footer-links-col ul { list-style: none; display: flex; flex-direction: column; gap: 12px; }
+        .footer-links-col a { color: var(--text-mid); transition: color 0.2s; display: inline-flex; align-items: center; gap: 8px; }
+        .footer-links-col a::before { content: '›'; color: var(--accent); font-weight: 700; }
+        .footer-links-col a:hover { color: var(--accent); }
+        .footer-premium-bottom { max-width: 1200px; margin-inline: auto; border-top: 1px solid var(--border-bright); padding-top: 24px; }
+        .footer-disclaimer { color: var(--text-lo); font-size: 0.72rem; line-height: 1.6; margin-bottom: 24px; text-align: justify; }
+        .footer-disclaimer strong { color: var(--text-mid); }
+        .footer-credits-wrap { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 16px; color: var(--text-mid); font-size: 0.75rem; }
+        .footer-credits-wrap strong { color: var(--text-hi); }
+        @media (max-width: 768px) {
+            .footer-premium-top { flex-direction: column; gap: 32px; }
+            .footer-credits-wrap { flex-direction: column; text-align: center; justify-content: center; }
+        }
+    </style>
 </head>
 <body>
 
-<!-- ░░ LAYERS ░░ -->
 <div class="scanlines"  aria-hidden="true"></div>
 <div class="bg-grid"    aria-hidden="true"></div>
 <div class="orb orb-1"  aria-hidden="true"></div>
@@ -38,7 +61,6 @@ $totalVol  = $hasError ? 0 : array_sum(array_column($topStocks, 'volume'));
 
 <div class="layout">
 
-    <!-- ════ TOPBAR ════ -->
     <header class="topbar">
         <div class="topbar-left">
             <span class="logo">Alta<span class="logo-accent">Agora</span><span class="logo-dot">.</span></span>
@@ -69,7 +91,6 @@ $totalVol  = $hasError ? 0 : array_sum(array_column($topStocks, 'volume'));
             <span class="live-dot" title="Dados ao vivo"></span>
             <span class="update-time mono"><?= $lastUpdate ?></span>
 
-            <!-- ── COUNTDOWN ── -->
             <div class="countdown-wrap" title="Próxima atualização dos dados">
                 <span class="countdown-label">REFRESH</span>
                 <span class="countdown-timer mono" id="countdown"
@@ -89,40 +110,39 @@ $totalVol  = $hasError ? 0 : array_sum(array_column($topStocks, 'volume'));
 
     <main class="main-content">
 
-        <!-- ════ AVISO: API KEY AUSENTE ════ -->
-        <?php if ($apiKeyMissing): ?>
+        <?php if ($apiKeysMissing): ?>
         <div class="alert-banner alert-warning">
             <span class="alert-icon">⚙</span>
             <div>
-                <strong>Variável de ambiente não configurada.</strong>
-                <span>Defina <code>HG_API_KEY</code> no painel do Render em
+                <strong>Variáveis de ambiente incompletas.</strong>
+                <span>Defina <code>HG_API_KEY</code> e <code>BRAPI_KEY</code> no painel do Render em
                 <em>Settings → Environment Variables</em> e aguarde o redeploy.</span>
             </div>
         </div>
         <?php endif; ?>
 
-        <!-- ════ PAGE TITLE ════ -->
         <section class="page-title">
             <div class="page-title-inner">
-                <p class="page-eyebrow">// terminal financeiro</p>
+                <p class="page-eyebrow">// terminal financeiro híbrido</p>
                 <h1>Ações <span class="accent">em Alta</span></h1>
                 <p class="page-subtitle">
-                    Top gainers do pregão atual &middot; Cache de <?= CACHE_TIME / 60 ?> min &middot; Bolsa B3 · São Paulo
+                    Top gainers do pregão atual &middot; Bolsa B3 · São Paulo<br>
+                    <span style="color:var(--text-lo); font-size: 0.8em; margin-top: 4px; display: inline-block;">
+                        Powered by <strong>Brapi</strong> (Ações) & <strong>HG Brasil</strong> (Índices)
+                    </span>
                 </p>
             </div>
             <div class="title-line"></div>
         </section>
 
-        <?php if ($hasError && !$apiKeyMissing): ?>
-        <!-- ════ ERRO DE API ════ -->
+        <?php if ($hasError && !$apiKeysMissing): ?>
         <div class="alert-banner alert-error">
             <span class="alert-icon">⚠</span>
-            <p>Não foi possível carregar os dados. Verifique sua chave de API ou tente novamente em instantes.</p>
+            <p>Não foi possível carregar os dados das ações na B3. Verifique sua chave da Brapi ou tente novamente em instantes.</p>
         </div>
 
         <?php elseif (!$hasError): ?>
 
-        <!-- ════ STAT CARDS ════ -->
         <?php
         $topVar = formatVariation($topStock['change_percent']);
         $avgVar = formatVariation($avgChange);
@@ -167,12 +187,11 @@ $totalVol  = $hasError ? 0 : array_sum(array_column($topStocks, 'volume'));
             </div>
         </div>
 
-        <!-- ════ TABELA ════ -->
         <section class="table-section">
             <div class="table-header">
                 <h2 class="table-title">TOP <?= count($topStocks) ?> &mdash; Maiores Altas</h2>
                 <div class="table-header-right">
-                    <span class="table-badge">B3 &middot; São Paulo</span>
+                    <span class="table-badge">B3 &middot; Brapi Feed</span>
                 </div>
             </div>
 
@@ -233,10 +252,13 @@ $totalVol  = $hasError ? 0 : array_sum(array_column($topStocks, 'volume'));
             </div>
         </section>
 
-        <!-- ════ ÍNDICES ════ -->
         <?php if (!empty($indices)): ?>
         <section class="indices-section">
-            <h3 class="section-label">// índices do mercado</h3>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px;">
+                <h3 class="section-label" style="margin-bottom: 0;">// índices do mercado</h3>
+                <span style="font-size: 0.6rem; color: var(--text-lo); text-transform: uppercase; letter-spacing: 0.1em;">HG Brasil Feed</span>
+            </div>
+            
             <div class="indices-grid">
                 <?php foreach ($indices as $idx => $d):
                     $v = formatVariation((float)($d['variation'] ?? 0));
@@ -255,24 +277,46 @@ $totalVol  = $hasError ? 0 : array_sum(array_column($topStocks, 'volume'));
 
     </main>
 
-    <!-- ════ FOOTER ════ -->
-    <footer class="footer">
-        <span class="footer-brand">Alta<span class="accent">Agora</span></span>
-        <span class="footer-sep">·</span>
-        <span>Dados via <a href="https://hgbrasil.com" target="_blank" rel="noopener">HG Brasil</a></span>
-        <span class="footer-sep">·</span>
-        <span>Apenas para fins informativos</span>
-        <span class="footer-sep">·</span>
-        <span class="footer-credits">
-            Criado por <strong>Erick de Lima Souza</strong> &middot; <strong>Green Monster Project</strong>
-        </span>
-        <span class="footer-sep">·</span>
-        <span class="mono">&copy; <?= date('Y') ?></span>
+    <footer class="footer-premium">
+        <div class="footer-premium-top">
+            <div class="footer-brand-col">
+                <span class="logo">Alta<span class="logo-accent">Agora</span><span class="logo-dot">.</span></span>
+                <p class="footer-desc">
+                    Terminal financeiro de alta performance desenvolvido para oferecer uma visão limpa, rápida e direta das maiores movimentações da bolsa brasileira. Desenvolvido com arquitetura de baixo consumo e estética de terminal tech.
+                </p>
+            </div>
+            
+            <div class="footer-links-col">
+                <h4>Fontes de Dados</h4>
+                <ul>
+                    <li><a href="https://brapi.dev" target="_blank" rel="noopener">Brapi API (Ações)</a></li>
+                    <li><a href="https://hgbrasil.com" target="_blank" rel="noopener">HG Brasil (Índices)</a></li>
+                    <li><a href="https://www.b3.com.br" target="_blank" rel="noopener">B3 - Brasil Bolsa Balcão</a></li>
+                </ul>
+            </div>
+            
+            <div class="footer-links-col">
+                <h4>Projeto</h4>
+                <ul>
+                    <li><a href="https://github.com/Erick-Lim-Souza/AltaAgora" target="_blank" rel="noopener">Código Fonte (GitHub)</a></li>
+                    <li><a href="https://linkedin.com/in/erickdelimasouza" target="_blank" rel="noopener">Desenvolvedor</a></li>
+                </ul>
+            </div>
+        </div>
+        
+        <div class="footer-premium-bottom">
+            <div class="footer-disclaimer">
+                <strong>Aviso Legal:</strong> Os dados e cotações exibidos neste portal são consumidos via APIs públicas de terceiros (Brapi e HG Brasil) e podem apresentar divergências ou atraso (delay) em relação ao pregão ao vivo da B3. O AltaAgora tem caráter estritamente informativo, educacional e de portfólio tecnológico. As informações aqui contidas <strong>não constituem</strong> recomendações de compra, venda ou estratégias de investimento. Consulte sempre um analista de valores mobiliários certificado pela CVM antes de tomar decisões financeiras.
+            </div>
+            
+            <div class="footer-credits-wrap">
+                <span>&copy; <?= date('Y') ?> AltaAgora. Todos os direitos reservados.</span>
+                <span>Criado por <strong>Erick de Lima Souza</strong> &middot; Green Monster Project</span>
+            </div>
+        </div>
     </footer>
 
-</div><!-- /layout -->
-
-<script>
+</div><script>
 // ═══════════════════════════════════════════════
 //  AltaAgora — Countdown + Auto-refresh
 // ═══════════════════════════════════════════════
