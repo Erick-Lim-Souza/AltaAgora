@@ -334,3 +334,33 @@ body {
     .footer { flex-direction: column; text-align: center; gap: 6px; }
     .footer-sep { display: none; }
 }
+
+/* ═══════════════════════════════════════════════════════
+   NOVAS FEATURES (Busca, Filtros, Sparklines)
+   ═══════════════════════════════════════════════════════ */
+/* Search Bar */
+.search-wrap { display: flex; align-items: center; background: var(--bg-card); border: 1px solid var(--border); border-radius: 99px; padding: 4px 12px; transition: border-color 0.2s; }
+.search-wrap:focus-within { border-color: var(--accent); box-shadow: var(--accent-glow); }
+.search-input { background: transparent; border: none; color: var(--text-hi); font-family: var(--font-mono); font-size: 0.75rem; text-transform: uppercase; width: 120px; outline: none; }
+.search-input::placeholder { color: var(--text-lo); text-transform: none; }
+
+/* Table Filters */
+.table-controls { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; align-items: center; }
+.filter-btn { background: var(--bg-card); border: 1px solid var(--border); color: var(--text-mid); padding: 6px 12px; border-radius: var(--r); font-size: 0.7rem; font-family: var(--font-mono); cursor: pointer; transition: all 0.2s; }
+.filter-btn:hover { background: rgba(255,255,255,0.05); color: var(--text-hi); }
+.filter-btn.active { background: var(--accent-dim); border-color: rgba(0,255,163,.4); color: var(--accent); font-weight: 700; }
+
+/* Sparkline */
+.sparkline-svg { width: 60px; height: 24px; overflow: visible; stroke-linejoin: round; stroke-linecap: round; }
+.sparkline-line { fill: none; stroke-width: 1.5; }
+.sparkline-line.positive { stroke: var(--accent); filter: drop-shadow(0px 2px 4px rgba(0,255,163,0.3)); }
+.sparkline-line.negative { stroke: var(--red); filter: drop-shadow(0px 2px 4px rgba(255,74,107,0.3)); }
+.col-chart { width: 80px; text-align: center; }
+
+/* Hidden state for search */
+.hidden-row { display: none !important; }
+
+@media (max-width: 768px) {
+    .search-wrap { display: none; /* Ocultar no topbar mobile por espaço */ }
+    .col-chart { display: none; }
+}
