@@ -1,7 +1,7 @@
 <?php
 // ═══════════════════════════════════════════════════════
 //  AltaAgora — config.php
-//  Configuração central · Pronto para Render + Env Vars
+//  Configuração central · Multi-API (HG Brasil + Brapi)
 // ═══════════════════════════════════════════════════════
 
 // Bloquear acesso direto a este arquivo
@@ -18,37 +18,45 @@ if (!headers_sent()) {
     header('Permissions-Policy: geolocation=(), camera=(), microphone=()');
     header("Content-Security-Policy: default-src 'self'; "
          . "img-src 'self' https: data:; "
-         . "style-src 'self' https://fonts.googleapis.com 'unsafe-inline' https://use.typekit.net; "
-         . "font-src https://fonts.gstatic.com https://use.typekit.net data:; "
+         . "style-src 'self' https://fonts.googleapis.com https://use.typekit.net 'unsafe-inline'; "
+         . "font-src 'self' https://fonts.gstatic.com https://use.typekit.net data:; "
          . "script-src 'self' 'unsafe-inline';");
 }
 
-// ── API Key via variável de ambiente (Render Dashboard) ─
-$apiKey = '';
+// ── API Keys via variável de ambiente (Render Dashboard) ─
+$hgApiKey    = '';
+$brapiApiKey = '';
 
-// Tenta buscar de 3 formas diferentes (necessário para contornar bloqueios do Apache/Docker)
-if (empty($apiKey)) $apiKey = getenv('HG_API_KEY') ?: '';
-if (empty($apiKey) && isset($_ENV['HG_API_KEY'])) $apiKey = $_ENV['HG_API_KEY'];
-if (empty($apiKey) && isset($_SERVER['HG_API_KEY'])) $apiKey = $_SERVER['HG_API_KEY'];
+// Tenta buscar de 3 formas diferentes para bypass do Docker
+if (empty($hgApiKey)) $hgApiKey = getenv('HG_API_KEY') ?: ($_ENV['HG_API_KEY'] ?? ($_SERVER['HG_API_KEY'] ?? ''));
+if (empty($brapiApiKey)) $brapiApiKey = getenv('BRAPI_KEY') ?: ($_ENV['BRAPI_KEY'] ?? ($_SERVER['BRAPI_KEY'] ?? ''));
 
 // Fallback para desenvolvimento local via .env.local (não sobe pro Git)
-if (empty($apiKey) && file_exists(__DIR__ . '/.env.local')) {
+if ((empty($hgApiKey) || empty($brapiApiKey)) && file_exists(__DIR__ . '/.env.local')) {
     foreach (file(__DIR__ . '/.env.local', FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) as $line) {
         if (str_starts_with(trim($line), '#')) continue;
         $parts = explode('=', $line, 2);
-        if (count($parts) === 2 && trim($parts[0]) === 'HG_API_KEY') {
-            $apiKey = trim($parts[1]);
-            break;
+        if (count($parts) === 2) {
+            $key = trim($parts[0]);
+            $val = trim($parts[1]);
+            if ($key === 'HG_API_KEY') $hgApiKey = $val;
+            if ($key === 'BRAPI_KEY')  $brapiApiKey = $val;
         }
     }
 }
 
-// Registra no log do Render se a chave foi encontrada (ajuda muito no debug!)
-error_log("[AltaAgora] Status da API Key no servidor: " . (!empty($apiKey) ? "ENCONTRADA" : "AUSENTE"));
+// Registra no log do Render se as chaves foram encontradas (debug)
+error_log("[AltaAgora] HG Key: " . (!empty($hgApiKey) ? "OK" : "FALTA") . " | Brapi Key: " . (!empty($brapiApiKey) ? "OK" : "FALTA"));
 
-define('API_KEY',      $apiKey);
-define('API_KEY_SET',  !empty($apiKey));
+// HG Brasil Auth (Índices)
+define('API_KEY', $hgApiKey);
+define('API_KEY_SET', !empty($hgApiKey));
 define('API_BASE_URL', 'https://api.hgbrasil.com/finance');
+
+// Brapi Auth (Ações da B3)
+define('BRAPI_KEY', $brapiApiKey);
+define('BRAPI_KEY_SET', !empty($brapiApiKey));
+define('BRAPI_BASE_URL', 'https://brapi.dev/api');
 
 // ── Cache ───────────────────────────────────────────────
 define('CACHE_DIR',  __DIR__ . '/cache/');
@@ -76,7 +84,7 @@ function checkRateLimit(): void {
     $file   = CACHE_DIR . 'rl_' . md5($ip) . '.json';
     $now    = time();
     $window = 60;
-    $max    = 60; // Você pode aumentar para 120 depois, se o tráfego subir
+    $max    = 60; // Você pode aumentar para 120 depois se o site tiver muito acesso
 
     $data = ['count' => 0, 'start' => $now];
     if (file_exists($file)) {
