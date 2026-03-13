@@ -6,16 +6,16 @@
 require_once 'config.php';
 
 /**
- * Função genérica para fazer requisições HTTP com Cache
+ * Função genérica para requisições com Tempo de Cache Específico
  */
-function fetchApi(string $url, string $cacheSufix): array {
+function fetchApi(string $url, string $cacheSufix, int $cacheTime): array {
     $cacheKey  = md5($url . $cacheSufix);
     $cacheFile = CACHE_DIR . $cacheKey . '.json';
 
-    // Valida Cache
+    // Valida Cache com base no tempo específico daquela API
     if (file_exists($cacheFile)) {
         $age = time() - filemtime($cacheFile);
-        if ($age < CACHE_TIME) {
+        if ($age < $cacheTime) {
             $cached = json_decode(file_get_contents($cacheFile), true);
             if (json_last_error() === JSON_ERROR_NONE) {
                 return array_merge($cached, ['_cached' => true, '_cache_age' => $age]);
@@ -55,26 +55,23 @@ function fetchApi(string $url, string $cacheSufix): array {
 }
 
 /**
- * Retorna top ações em alta via BRAPI
+ * Retorna top ações em alta via BRAPI (Cache de 30min)
  */
 function getTopGainers(int $limit = 15): array {
     if (!BRAPI_KEY_SET) return [];
 
-    // CORREÇÃO: Usando 'sortBy=change' em vez de 'change_pct'
     $url = BRAPI_BASE_URL . '/quote/list?sortBy=change&sortOrder=desc&limit=' . $limit . '&token=' . BRAPI_KEY;
     
-    $data = fetchApi($url, 'brapi_top_gainers');
+    // Passando o tempo de cache exclusivo da Brapi
+    $data = fetchApi($url, 'brapi_top_gainers', CACHE_TIME_BRAPI);
 
-    if (isset($data['error']) || empty($data['stocks'])) {
-        return [];
-    }
+    if (isset($data['error']) || empty($data['stocks'])) return [];
 
     $stocks = [];
     foreach ($data['stocks'] as $stock) {
         $price = (float)($stock['close'] ?? 0);
         $changePct = (float)($stock['change'] ?? 0);
         
-        // Calcula a variação financeira em R$ com base na % de mudança
         $oldPrice = $changePct != 0 ? ($price / (1 + ($changePct / 100))) : $price;
         $changePrice = $price - $oldPrice;
 
@@ -88,39 +85,38 @@ function getTopGainers(int $limit = 15): array {
             'logo'           => !empty($stock['logo']) ? filter_var($stock['logo'], FILTER_VALIDATE_URL) : null,
         ];
     }
-
     return $stocks;
 }
 
 /**
- * Índices do mercado via HG BRASIL
+ * Índices do mercado via HG BRASIL (Cache de 10min)
  */
 function getMarketIndices(): array {
     if (!API_KEY_SET) return [];
     
     $url = API_BASE_URL . '?fields=stocks&key=' . API_KEY;
-    $data = fetchApi($url, 'hg_indices');
+    
+    // Passando o tempo de cache exclusivo da HG Brasil
+    $data = fetchApi($url, 'hg_indices', CACHE_TIME_HG);
     
     return $data['results']['stocks'] ?? [];
 }
 
 /**
- * Segundos restantes até o próximo refresh global
+ * Cronômetro Frontend: Baseado no tempo da HG Brasil (o ciclo mais rápido)
  */
 function getSecondsUntilRefresh(): int {
-    $files = glob(CACHE_DIR . '*.json');
-    if (empty($files)) return 0;
+    if (!API_KEY_SET) return PAGE_REFRESH;
+    $cacheFile = CACHE_DIR . md5(API_BASE_URL . '?fields=stocks&key=' . API_KEY . 'hg_indices') . '.json';
     
-    $files = array_filter($files, fn($f) => basename($f) !== '.htaccess' && !str_starts_with(basename($f), 'rl_'));
-    if (empty($files)) return 0;
+    if (!file_exists($cacheFile)) return PAGE_REFRESH;
     
-    $ts = (int)max(array_map('filemtime', $files));
-    $remaining = CACHE_TIME - (time() - $ts);
+    $age = time() - filemtime($cacheFile);
+    $remaining = PAGE_REFRESH - $age;
     return max(0, $remaining);
 }
 
 // ── Helpers ──────────────────────────────────────────────
-
 function h(string $v): string { return htmlspecialchars($v, ENT_QUOTES | ENT_HTML5, 'UTF-8'); }
 
 function formatMoney(float $v): string {
@@ -134,10 +130,7 @@ function formatVariation(float $v): array {
     $symbol    = $pos ? '▲' : '▼';
     $formatted = number_format(abs($v), 2, ',', '.');
     return [
-        'class'  => $class,
-        'symbol' => $symbol,
-        'value'  => $formatted,
-        'raw'    => $v,
+        'class'  => $class, 'symbol' => $symbol, 'value'  => $formatted, 'raw'    => $v,
         'html'   => "<span class='{$class}'>{$symbol} {$formatted}%</span>",
     ];
 }
