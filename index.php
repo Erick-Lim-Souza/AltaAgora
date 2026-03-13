@@ -187,6 +187,27 @@ $totalVol  = $hasError ? 0 : array_sum(array_column($topStocks, 'volume'));
             </div>
         </div>
 
+        <?php if (!empty($indices)): ?>
+        <section class="indices-section">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px;">
+                <h3 class="section-label" style="margin-bottom: 0;">// índices do mercado</h3>
+                <span style="font-size: 0.6rem; color: var(--text-lo); text-transform: uppercase; letter-spacing: 0.1em;">HG Brasil Feed</span>
+            </div>
+            
+            <div class="indices-grid">
+                <?php foreach ($indices as $idx => $d):
+                    $v = formatVariation((float)($d['variation'] ?? 0));
+                ?>
+                <div class="index-card">
+                    <span class="index-name"><?= h($d['name'] ?? $idx) ?></span>
+                    <span class="index-points mono"><?= number_format((float)($d['points'] ?? 0), 2, ',', '.') ?></span>
+                    <span class="index-var <?= $v['class'] ?>"><?= $v['html'] ?></span>
+                </div>
+                <?php endforeach; ?>
+            </div>
+        </section>
+        <?php endif; ?>
+
         <section class="table-section">
             <div class="table-header">
                 <h2 class="table-title">TOP <?= count($topStocks) ?> &mdash; Maiores Altas</h2>
@@ -251,27 +272,6 @@ $totalVol  = $hasError ? 0 : array_sum(array_column($topStocks, 'volume'));
                 </table>
             </div>
         </section>
-
-        <?php if (!empty($indices)): ?>
-        <section class="indices-section">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px;">
-                <h3 class="section-label" style="margin-bottom: 0;">// índices do mercado</h3>
-                <span style="font-size: 0.6rem; color: var(--text-lo); text-transform: uppercase; letter-spacing: 0.1em;">HG Brasil Feed</span>
-            </div>
-            
-            <div class="indices-grid">
-                <?php foreach ($indices as $idx => $d):
-                    $v = formatVariation((float)($d['variation'] ?? 0));
-                ?>
-                <div class="index-card">
-                    <span class="index-name"><?= h($d['name'] ?? $idx) ?></span>
-                    <span class="index-points mono"><?= number_format((float)($d['points'] ?? 0), 2, ',', '.') ?></span>
-                    <span class="index-var <?= $v['class'] ?>"><?= $v['html'] ?></span>
-                </div>
-                <?php endforeach; ?>
-            </div>
-        </section>
-        <?php endif; ?>
 
         <?php endif; ?>
 
