@@ -31,7 +31,7 @@ $brapiApiKey = '';
 if (empty($hgApiKey)) $hgApiKey = getenv('HG_API_KEY') ?: ($_ENV['HG_API_KEY'] ?? ($_SERVER['HG_API_KEY'] ?? ''));
 if (empty($brapiApiKey)) $brapiApiKey = getenv('BRAPI_KEY') ?: ($_ENV['BRAPI_KEY'] ?? ($_SERVER['BRAPI_KEY'] ?? ''));
 
-// Fallback para desenvolvimento local via .env.local (não sobe pro Git)
+// Fallback para desenvolvimento local via .env.local
 if ((empty($hgApiKey) || empty($brapiApiKey)) && file_exists(__DIR__ . '/.env.local')) {
     foreach (file(__DIR__ . '/.env.local', FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) as $line) {
         if (str_starts_with(trim($line), '#')) continue;
@@ -45,7 +45,7 @@ if ((empty($hgApiKey) || empty($brapiApiKey)) && file_exists(__DIR__ . '/.env.lo
     }
 }
 
-// Registra no log do Render se as chaves foram encontradas (debug)
+// Registra no log do Render se as chaves foram encontradas
 error_log("[AltaAgora] HG Key: " . (!empty($hgApiKey) ? "OK" : "FALTA") . " | Brapi Key: " . (!empty($brapiApiKey) ? "OK" : "FALTA"));
 
 // HG Brasil Auth (Índices)
@@ -58,9 +58,17 @@ define('BRAPI_KEY', $brapiApiKey);
 define('BRAPI_KEY_SET', !empty($brapiApiKey));
 define('BRAPI_BASE_URL', 'https://brapi.dev/api');
 
-// ── Cache ───────────────────────────────────────────────
+// ── Cache Estratégico (Otimização de Limites) ───────────
 define('CACHE_DIR',  __DIR__ . '/cache/');
-define('CACHE_TIME', 300); // 5 minutos
+
+// HG Brasil: 400 req/dia. 10 min = 144 req/dia (Seguro!)
+define('CACHE_TIME_HG', 600); 
+
+// Brapi: Limite mensal alto, mas só atualiza a cada 30 min. 30 min = 48 req/dia (Perfeito!)
+define('CACHE_TIME_BRAPI', 1800); 
+
+// Frontend recarrega a tela com base no timer mais rápido (10 min)
+define('PAGE_REFRESH', 600); 
 
 if (!is_dir(CACHE_DIR)) {
     mkdir(CACHE_DIR, 0755, true);
@@ -78,13 +86,13 @@ define('APP_ENV',     getenv('APP_ENV') ?: 'production');
 // ── Timezone ─────────────────────────────────────────────
 date_default_timezone_set('America/Sao_Paulo');
 
-// ── Rate Limiting por IP (60 req/min) ───────────────────
+// ── Rate Limiting por IP ─────────────────────────────────
 function checkRateLimit(): void {
     $ip     = preg_replace('/[^a-fA-F0-9:.]/', '', $_SERVER['REMOTE_ADDR'] ?? '0');
     $file   = CACHE_DIR . 'rl_' . md5($ip) . '.json';
     $now    = time();
     $window = 60;
-    $max    = 60; // Você pode aumentar para 120 depois se o site tiver muito acesso
+    $max    = 60; 
 
     $data = ['count' => 0, 'start' => $now];
     if (file_exists($file)) {
@@ -99,5 +107,4 @@ function checkRateLimit(): void {
         exit('Too Many Requests');
     }
 }
-
 checkRateLimit();
