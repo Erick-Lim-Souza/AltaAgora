@@ -16,24 +16,20 @@ if (!headers_sent()) {
     header('X-XSS-Protection: 1; mode=block');
     header('Referrer-Policy: strict-origin-when-cross-origin');
     header('Permissions-Policy: geolocation=(), camera=(), microphone=()');
-
-    // font-src usa wildcard (* data:) — extensões de browser (Render dashboard,
-    // Grammarly, etc.) injetam fontes via typekit/data-uri que a CSP bloquearia.
-    // Fontes não executam código, então liberar font-src não representa risco.
     header("Content-Security-Policy: default-src 'self'; "
-         . "img-src 'self' https: data: blob:; "
-         . "style-src 'self' https: 'unsafe-inline'; "
-         . "font-src * data:; "
-         . "script-src 'self' 'unsafe-inline'; "
-         . "connect-src 'self'; "
-         . "frame-ancestors 'none'; "
-         . "base-uri 'self'; "
-         . "form-action 'self';");
+         . "img-src 'self' https: data:; "
+         . "style-src 'self' https://fonts.googleapis.com 'unsafe-inline'; "
+         . "font-src https://fonts.gstatic.com; "
+         . "script-src 'self' 'unsafe-inline';");
 }
 
 // ── API Key via variável de ambiente (Render Dashboard) ─
-// Render: Settings → Environment Variables → HG_API_KEY
-$apiKey = getenv('HG_API_KEY') ?: '';
+$apiKey = '';
+
+// Tenta buscar de 3 formas diferentes (necessário para contornar bloqueios do Apache/Docker)
+if (empty($apiKey)) $apiKey = getenv('HG_API_KEY') ?: '';
+if (empty($apiKey) && isset($_ENV['HG_API_KEY'])) $apiKey = $_ENV['HG_API_KEY'];
+if (empty($apiKey) && isset($_SERVER['HG_API_KEY'])) $apiKey = $_SERVER['HG_API_KEY'];
 
 // Fallback para desenvolvimento local via .env.local (não sobe pro Git)
 if (empty($apiKey) && file_exists(__DIR__ . '/.env.local')) {
@@ -46,6 +42,9 @@ if (empty($apiKey) && file_exists(__DIR__ . '/.env.local')) {
         }
     }
 }
+
+// Registra no log do Render se a chave foi encontrada (ajuda muito no debug!)
+error_log("[AltaAgora] Status da API Key no servidor: " . (!empty($apiKey) ? "ENCONTRADA" : "AUSENTE"));
 
 define('API_KEY',      $apiKey);
 define('API_KEY_SET',  !empty($apiKey));
@@ -77,7 +76,7 @@ function checkRateLimit(): void {
     $file   = CACHE_DIR . 'rl_' . md5($ip) . '.json';
     $now    = time();
     $window = 60;
-    $max    = 60;
+    $max    = 60; // Você pode aumentar para 120 depois, se o tráfego subir
 
     $data = ['count' => 0, 'start' => $now];
     if (file_exists($file)) {
