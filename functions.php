@@ -60,8 +60,8 @@ function fetchApi(string $url, string $cacheSufix): array {
 function getTopGainers(int $limit = 15): array {
     if (!BRAPI_KEY_SET) return [];
 
-    // Endpoint da Brapi que já traz a lista ordenada pelas maiores altas
-    $url = BRAPI_BASE_URL . '/quote/list?sortBy=change_pct&sortOrder=desc&limit=' . $limit . '&token=' . BRAPI_KEY;
+    // CORREÇÃO: Usando 'sortBy=change' em vez de 'change_pct'
+    $url = BRAPI_BASE_URL . '/quote/list?sortBy=change&sortOrder=desc&limit=' . $limit . '&token=' . BRAPI_KEY;
     
     $data = fetchApi($url, 'brapi_top_gainers');
 
