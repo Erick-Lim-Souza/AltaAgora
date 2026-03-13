@@ -18,8 +18,8 @@ if (!headers_sent()) {
     header('Permissions-Policy: geolocation=(), camera=(), microphone=()');
     header("Content-Security-Policy: default-src 'self'; "
          . "img-src 'self' https: data:; "
-         . "style-src 'self' https://fonts.googleapis.com 'unsafe-inline'; "
-         . "font-src https://fonts.gstatic.com; "
+         . "style-src 'self' https://fonts.googleapis.com 'unsafe-inline' https://use.typekit.net; "
+         . "font-src https://fonts.gstatic.com https://use.typekit.net data:; "
          . "script-src 'self' 'unsafe-inline';");
 }
 
