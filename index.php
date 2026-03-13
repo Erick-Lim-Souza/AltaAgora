@@ -71,7 +71,6 @@ $totalVol  = $hasError ? 0 : array_sum(array_column($topStocks, 'volume'));
             <div class="ticker-wrap">
                 <div class="ticker">
                     <?php
-                    // Duplicado para loop infinito
                     for ($pass = 0; $pass < 2; $pass++):
                     foreach ($indices as $idx => $d):
                         $v = formatVariation((float)($d['variation'] ?? 0));
@@ -91,7 +90,7 @@ $totalVol  = $hasError ? 0 : array_sum(array_column($topStocks, 'volume'));
             <span class="live-dot" title="Dados ao vivo"></span>
             <span class="update-time mono"><?= $lastUpdate ?></span>
 
-            <div class="countdown-wrap" title="Próxima atualização dos dados">
+            <div class="countdown-wrap" title="Próxima atualização da tela">
                 <span class="countdown-label">REFRESH</span>
                 <span class="countdown-timer mono" id="countdown"
                       data-seconds="<?= $secondsLeft ?>">
@@ -99,7 +98,7 @@ $totalVol  = $hasError ? 0 : array_sum(array_column($topStocks, 'volume'));
                 </span>
                 <div class="countdown-bar">
                     <div class="countdown-bar-fill" id="countdown-bar"
-                         style="--pct:<?= $secondsLeft > 0 ? round(($secondsLeft / CACHE_TIME) * 100) : 0 ?>%">
+                         style="--pct:<?= $secondsLeft > 0 ? round(($secondsLeft / PAGE_REFRESH) * 100) : 0 ?>%">
                     </div>
                 </div>
             </div>
@@ -115,8 +114,7 @@ $totalVol  = $hasError ? 0 : array_sum(array_column($topStocks, 'volume'));
             <span class="alert-icon">⚙</span>
             <div>
                 <strong>Variáveis de ambiente incompletas.</strong>
-                <span>Defina <code>HG_API_KEY</code> e <code>BRAPI_KEY</code> no painel do Render em
-                <em>Settings → Environment Variables</em> e aguarde o redeploy.</span>
+                <span>Defina <code>HG_API_KEY</code> e <code>BRAPI_KEY</code> no painel do Render.</span>
             </div>
         </div>
         <?php endif; ?>
@@ -128,7 +126,7 @@ $totalVol  = $hasError ? 0 : array_sum(array_column($topStocks, 'volume'));
                 <p class="page-subtitle">
                     Top gainers do pregão atual &middot; Bolsa B3 · São Paulo<br>
                     <span style="color:var(--text-lo); font-size: 0.8em; margin-top: 4px; display: inline-block;">
-                        Powered by <strong>Brapi</strong> (Ações) & <strong>HG Brasil</strong> (Índices)
+                        Atualização do Cache: Índices (<?= CACHE_TIME_HG / 60 ?>min) · Ações B3 (<?= CACHE_TIME_BRAPI / 60 ?>min)
                     </span>
                 </p>
             </div>
@@ -180,7 +178,7 @@ $totalVol  = $hasError ? 0 : array_sum(array_column($topStocks, 'volume'));
                         <circle class="ring-fill" cx="22" cy="22" r="18"
                             id="ring-fill"
                             stroke-dasharray="113.1"
-                            stroke-dashoffset="<?= 113.1 - (113.1 * ($secondsLeft / CACHE_TIME)) ?>"
+                            stroke-dashoffset="<?= 113.1 - (113.1 * ($secondsLeft / PAGE_REFRESH)) ?>"
                         />
                     </svg>
                 </div>
@@ -321,7 +319,7 @@ $totalVol  = $hasError ? 0 : array_sum(array_column($topStocks, 'volume'));
 //  AltaAgora — Countdown + Auto-refresh
 // ═══════════════════════════════════════════════
 (function () {
-    const TOTAL        = <?= CACHE_TIME ?>;           // segundos totais do cache
+    const TOTAL        = <?= PAGE_REFRESH ?>;         // segundos totais do ciclo da página
     let   remaining    = <?= $secondsLeft ?>;         // segundos restantes do PHP
 
     const elTopbar     = document.getElementById('countdown');
@@ -340,7 +338,6 @@ $totalVol  = $hasError ? 0 : array_sum(array_column($topStocks, 'volume'));
 
     function update() {
         if (remaining <= 0) {
-            // Recarregar página para buscar dados frescos
             location.reload();
             return;
         }
@@ -349,17 +346,14 @@ $totalVol  = $hasError ? 0 : array_sum(array_column($topStocks, 'volume'));
         if (elTopbar)  elTopbar.textContent  = display;
         if (elCard)    elCard.textContent     = display;
 
-        // Barra linear na topbar
         const pct = Math.round((remaining / TOTAL) * 100);
         if (elBar) elBar.style.setProperty('--pct', pct + '%');
 
-        // Anel SVG no card
         if (elRing) {
             const offset = CIRCUMF - (CIRCUMF * (remaining / TOTAL));
             elRing.style.strokeDashoffset = offset.toFixed(2);
         }
 
-        // Cor de urgência nos últimos 30s
         const urgency = remaining <= 30;
         [elTopbar, elCard].forEach(el => {
             if (el) el.classList.toggle('countdown-urgent', urgency);
@@ -368,12 +362,10 @@ $totalVol  = $hasError ? 0 : array_sum(array_column($topStocks, 'volume'));
         remaining--;
     }
 
-    // Iniciar imediatamente + tick a cada segundo
     update();
     setInterval(update, 1000);
 })();
 
-// Highlight de linha
 document.querySelectorAll('.table-row').forEach(row => {
     row.addEventListener('mouseenter', () => row.classList.add('row-hl'));
     row.addEventListener('mouseleave', () => row.classList.remove('row-hl'));
