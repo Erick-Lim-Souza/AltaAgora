@@ -102,7 +102,9 @@ function generateSparkline($seed, $isPositive) {
             <?php endif; ?>
         </div>
 
-        <div class="topbar-right">
+<div class="topbar-right">
+            <a href="sobre.php" style="color: var(--text-mid); font-size: 0.75rem; margin-right: 16px; font-family: var(--font-mono); text-transform: uppercase; transition: color 0.2s;" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--text-mid)'">// Sobre o Projeto</a>
+
             <div class="search-wrap">
                 <span style="color:var(--text-mid); margin-right:6px;">🔍</span>
                 <input type="text" id="searchInput" class="search-input" placeholder="Filtrar ticker..." autocomplete="off">
