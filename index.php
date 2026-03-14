@@ -1,20 +1,25 @@
 <?php
 // ═══════════════════════════════════════════════════════
 //  AltaAgora — index.php
-//  Terminal Híbrido: Brapi (Ações) + HG Brasil (Índices)
+//  Terminal Híbrido: Brapi (Ações) + HG Brasil (Índices e Moedas)
 // ═══════════════════════════════════════════════════════
 require_once 'functions.php';
 
-$topStocks      = getTopGainers(15);
-$indices        = getMarketIndices();
+// Novas chamadas separadas para Altas e Baixas
+$gainers        = getBrapiStocks('desc', 15);
+$losers         = getBrapiStocks('asc', 15);
+$hgData         = getHgData();
+$indices        = $hgData['stocks'] ?? [];
+$currencies     = $hgData['currencies'] ?? [];
+
 $lastUpdate     = date('H:i:s');
-$hasError       = empty($topStocks);
+$hasError       = empty($gainers);
 $apiKeysMissing = (!API_KEY_SET || !BRAPI_KEY_SET);
 $secondsLeft    = getSecondsUntilRefresh();
 
-$topStock  = $hasError ? null : $topStocks[0];
-$avgChange = $hasError ? 0 : array_sum(array_column($topStocks, 'change_percent')) / max(1, count($topStocks));
-$totalVol  = $hasError ? 0 : array_sum(array_column($topStocks, 'volume'));
+$topStock  = $hasError ? null : $gainers[0];
+$avgChange = $hasError ? 0 : array_sum(array_column($gainers, 'change_percent')) / max(1, count($gainers));
+$totalVol  = $hasError ? 0 : array_sum(array_column($gainers, 'volume'));
 
 // Gerador de minigráfico (Sparkline) procedural para portfólio
 function generateSparkline($seed, $isPositive) {
@@ -30,15 +35,63 @@ function generateSparkline($seed, $isPositive) {
     $points[count($points)-1] = "60,$yLast";
     return implode(" ", $points);
 }
+
+// Renderizador de linhas da tabela para evitar duplicar HTML nas abas
+function renderTableRows($stocks, $isLosers = false) {
+    $maxPct = max(array_map('abs', array_column($stocks, 'change_percent'))) ?: 1;
+    foreach ($stocks as $i => $stock):
+        $var    = formatVariation($stock['change_percent']);
+        $barPct = round((abs($stock['change_percent']) / $maxPct) * 100);
+        $isPos  = $stock['change_percent'] >= 0;
+?>
+        <tr class="table-row" 
+            data-symbol="<?= strtolower($stock['symbol']) ?>" 
+            data-price="<?= $stock['price'] ?>" 
+            data-vol="<?= $stock['volume'] ?>" 
+            data-rank="<?= $i ?>"
+            data-pct="<?= $stock['change_percent'] ?>"
+            data-logo="<?= $stock['logo'] ?>"
+            style="--row-delay:<?= $i * 0.035 ?>s">
+            <td><span class="rank rank-<?= $i < 3 ? ($i + 1) : 'n' ?>"><?= $i + 1 ?></span></td>
+            <td>
+                <div class="asset-cell">
+                    <?php if ($stock['logo']): ?>
+                    <img src="<?= h($stock['logo']) ?>" alt="" class="stock-logo" loading="lazy">
+                    <?php else: ?>
+                    <span class="stock-initials"><?= mb_substr($stock['symbol'], 0, 2) ?></span>
+                    <?php endif; ?>
+                    <strong class="asset-ticker"><?= $stock['symbol'] ?></strong>
+                </div>
+            </td>
+            <td class="col-company"><?= $stock['name'] ?></td>
+            
+            <td class="col-chart">
+                <svg class="sparkline-svg" viewBox="0 0 60 24">
+                    <polyline class="sparkline-line <?= $var['class'] ?>" points="<?= generateSparkline($stock['symbol'], $isPos) ?>" />
+                </svg>
+            </td>
+
+            <td class="mono col-price"><?= formatMoney($stock['price']) ?></td>
+            <td class="mono <?= $var['class'] ?>"><?= ($stock['change_price'] >= 0 ? '+' : '') ?><?= formatMoney($stock['change_price']) ?></td>
+            <td><span class="pct-pill <?= $var['class'] ?>"><?= $var['symbol'] ?>&thinsp;<?= $var['value'] ?>%</span></td>
+            <td class="mono col-vol"><?= formatVolume($stock['volume']) ?></td>
+            <td class="col-bar">
+                <div class="bar-track"><div class="bar-fill <?= $var['class'] ?>" style="--w:<?= $barPct ?>%"></div></div>
+                <span class="bar-pct"><?= $barPct ?>%</span>
+            </td>
+        </tr>
+<?php 
+    endforeach;
+}
 ?>
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="AltaAgora — Ações com maiores altas do pregão B3 em tempo real.">
+    <meta name="description" content="AltaAgora — Ações em alta e baixa do pregão B3 em tempo real.">
     <meta name="robots" content="noindex, nofollow">
-    <title>AltaAgora · Ações em Alta — Pregão B3</title>
+    <title>AltaAgora · Mercado B3</title>
     
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#050810">
@@ -102,7 +155,7 @@ function generateSparkline($seed, $isPositive) {
             <?php endif; ?>
         </div>
 
-<div class="topbar-right">
+        <div class="topbar-right">
             <a href="sobre.php" style="color: var(--text-mid); font-size: 0.75rem; margin-right: 16px; font-family: var(--font-mono); text-transform: uppercase; transition: color 0.2s;" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--text-mid)'">// Sobre o Projeto</a>
 
             <div class="search-wrap">
@@ -140,11 +193,11 @@ function generateSparkline($seed, $isPositive) {
         <section class="page-title">
             <div class="page-title-inner">
                 <p class="page-eyebrow">// terminal financeiro híbrido</p>
-                <h1>Ações <span class="accent">em Alta</span></h1>
+                <h1>Mercado <span class="accent">B3</span></h1>
                 <p class="page-subtitle">
-                    Top gainers do pregão atual &middot; Bolsa B3 · São Paulo<br>
+                    Painel do pregão atual &middot; Bolsa B3 · São Paulo<br>
                     <span style="color:var(--text-lo); font-size: 0.8em; margin-top: 4px; display: inline-block;">
-                        Atualização: Índices (<?= CACHE_TIME_HG / 60 ?>min) · Ações (<?= CACHE_TIME_BRAPI / 60 ?>min)
+                        Atualização: Índices/Moedas (<?= CACHE_TIME_HG / 60 ?>min) · Ações (<?= CACHE_TIME_BRAPI / 60 ?>min)
                     </span>
                     <button id="notifyBtn" class="filter-btn" style="margin-left:12px;">🔔 Alertas de Disparo</button>
                 </p>
@@ -159,27 +212,21 @@ function generateSparkline($seed, $isPositive) {
         </div>
         <?php elseif (!$hasError): ?>
 
-        <?php
-        $topVar = formatVariation($topStock['change_percent']);
-        $avgVar = formatVariation($avgChange);
-        ?>
         <div class="stat-grid">
             <div class="stat-card stat-card--highlight" style="--delay:0s">
                 <div class="stat-label">▲ MAIOR ALTA</div>
-                <div class="stat-symbol"><?= $topStock['symbol'] ?></div>
-                <div class="stat-price mono"><?= formatMoney($topStock['price']) ?></div>
-                <div class="stat-var <?= $topVar['class'] ?> mono"><?= $topVar['symbol'] ?>&thinsp;<?= $topVar['value'] ?>%</div>
-                <div class="stat-name"><?= $topStock['name'] ?></div>
+                <div class="stat-symbol"><?= $gainers[0]['symbol'] ?></div>
+                <div class="stat-price mono"><?= formatMoney($gainers[0]['price']) ?></div>
             </div>
-            <div class="stat-card" style="--delay:.07s">
-                <div class="stat-label">~ MÉDIA DO GRUPO</div>
-                <div class="stat-big <?= $avgVar['class'] ?> mono"><?= $avgVar['symbol'] ?><?= $avgVar['value'] ?>%</div>
-                <div class="stat-sub">top <?= count($topStocks) ?> ações</div>
+            <div class="stat-card" style="--delay:.07s; border-color: rgba(255,74,107,.25);">
+                <div class="stat-label" style="color: var(--red);">▼ MAIOR QUEDA</div>
+                <div class="stat-symbol"><?= $losers[0]['symbol'] ?></div>
+                <div class="stat-price mono"><?= formatMoney($losers[0]['price']) ?></div>
             </div>
             <div class="stat-card" style="--delay:.14s">
-                <div class="stat-label"># VOLUME TOTAL</div>
+                <div class="stat-label"># VOLUME ALTAS</div>
                 <div class="stat-big mono"><?= formatVolume($totalVol) ?></div>
-                <div class="stat-sub">ações negociadas</div>
+                <div class="stat-sub">ações negociadas no Top 15</div>
             </div>
             <div class="stat-card stat-card--countdown" style="--delay:.21s">
                 <div class="stat-label">↻ PRÓX. ATUALIZAÇÃO</div>
@@ -196,33 +243,58 @@ function generateSparkline($seed, $isPositive) {
             </div>
         </div>
 
-        <?php if (!empty($indices)): ?>
-        <section class="indices-section">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px;">
-                <h3 class="section-label" style="margin-bottom: 0;">// índices do mercado</h3>
-                <span style="font-size: 0.6rem; color: var(--text-lo); text-transform: uppercase; letter-spacing: 0.1em;">HG Brasil Feed</span>
-            </div>
-            <div class="indices-grid">
-                <?php foreach ($indices as $idx => $d):
-                    $v = formatVariation((float)($d['variation'] ?? 0));
-                ?>
-                <div class="index-card">
-                    <span class="index-name"><?= h($d['name'] ?? $idx) ?></span>
-                    <span class="index-points mono"><?= number_format((float)($d['points'] ?? 0), 2, ',', '.') ?></span>
-                    <span class="index-var <?= $v['class'] ?>"><?= $v['html'] ?></span>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 24px; margin-bottom: 28px;">
+            
+            <?php if (!empty($currencies) && isset($currencies['source'])): ?>
+            <section class="indices-section" style="margin-bottom: 0;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px;">
+                    <h3 class="section-label" style="margin-bottom: 0;">// câmbio oficial</h3>
+                    <span class="currency-source">Moeda Base: <strong>BRL (Real)</strong></span>
                 </div>
-                <?php endforeach; ?>
-            </div>
-        </section>
-        <?php endif; ?>
+                <div class="indices-grid">
+                    <?php 
+                    $allowed = ['USD', 'EUR', 'GBP', 'BTC'];
+                    foreach ($allowed as $curr):
+                        if (!isset($currencies[$curr])) continue;
+                        $c = $currencies[$curr];
+                        $v = formatVariation((float)($c['variation'] ?? 0));
+                    ?>
+                    <div class="index-card">
+                        <span class="index-name"><?= h($c['name'] ?? $curr) ?> (<?= $curr ?>)</span>
+                        <span class="index-points mono">R$ <?= number_format((float)($c['buy'] ?? 0), 4, ',', '.') ?></span>
+                        <span class="index-var <?= $v['class'] ?>"><?= $v['html'] ?></span>
+                    </div>
+                    <?php endforeach; ?>
+                </div>
+            </section>
+            <?php endif; ?>
+
+            <?php if (!empty($indices)): ?>
+            <section class="indices-section" style="margin-bottom: 0;">
+                <h3 class="section-label" style="margin-bottom: 18px;">// índices globais</h3>
+                <div class="indices-grid">
+                    <?php foreach (array_slice($indices, 0, 4) as $idx => $d): $v = formatVariation((float)($d['variation'] ?? 0)); ?>
+                    <div class="index-card">
+                        <span class="index-name"><?= h($d['name'] ?? $idx) ?></span>
+                        <span class="index-points mono"><?= number_format((float)($d['points'] ?? 0), 2, ',', '.') ?></span>
+                        <span class="index-var <?= $v['class'] ?>"><?= $v['html'] ?></span>
+                    </div>
+                    <?php endforeach; ?>
+                </div>
+            </section>
+            <?php endif; ?>
+        </div>
 
         <section class="table-section">
             <div class="table-header" style="flex-wrap: wrap; gap: 16px;">
-                <h2 class="table-title">TOP <?= count($topStocks) ?> &mdash; Maiores Altas</h2>
+                <div class="table-tabs">
+                    <button class="tab-btn active" data-target="gainers">Maiores Altas</button>
+                    <button class="tab-btn" data-target="losers">Maiores Quedas</button>
+                </div>
                 
                 <div class="table-controls">
                     <span style="font-size: 0.7rem; color: var(--text-mid);">Ordenar por:</span>
-                    <button class="filter-btn active" data-sort="rank">Variação %</button>
+                    <button class="filter-btn active" data-sort="rank">Impacto</button>
                     <button class="filter-btn" data-sort="price">Preço R$</button>
                     <button class="filter-btn" data-sort="vol">Volume</button>
                 </div>
@@ -243,51 +315,13 @@ function generateSparkline($seed, $isPositive) {
                             <th>Força</th>
                         </tr>
                     </thead>
-                    <tbody>
-                    <?php
-                    $maxPct = max(array_column($topStocks, 'change_percent')) ?: 1;
-                    foreach ($topStocks as $i => $stock):
-                        $var    = formatVariation($stock['change_percent']);
-                        $barPct = round(($stock['change_percent'] / $maxPct) * 100);
-                        $isPos  = $stock['change_percent'] >= 0;
-                    ?>
-                        <tr class="table-row" 
-                            data-symbol="<?= strtolower($stock['symbol']) ?>" 
-                            data-price="<?= $stock['price'] ?>" 
-                            data-vol="<?= $stock['volume'] ?>" 
-                            data-rank="<?= $i ?>"
-                            data-pct="<?= $stock['change_percent'] ?>"
-                            data-logo="<?= $stock['logo'] ?>"
-                            style="--row-delay:<?= $i * 0.035 ?>s">
-                            <td><span class="rank rank-<?= $i < 3 ? ($i + 1) : 'n' ?>"><?= $i + 1 ?></span></td>
-                            <td>
-                                <div class="asset-cell">
-                                    <?php if ($stock['logo']): ?>
-                                    <img src="<?= h($stock['logo']) ?>" alt="" class="stock-logo" loading="lazy">
-                                    <?php else: ?>
-                                    <span class="stock-initials"><?= mb_substr($stock['symbol'], 0, 2) ?></span>
-                                    <?php endif; ?>
-                                    <strong class="asset-ticker"><?= $stock['symbol'] ?></strong>
-                                </div>
-                            </td>
-                            <td class="col-company"><?= $stock['name'] ?></td>
-                            
-                            <td class="col-chart">
-                                <svg class="sparkline-svg" viewBox="0 0 60 24">
-                                    <polyline class="sparkline-line <?= $var['class'] ?>" points="<?= generateSparkline($stock['symbol'], $isPos) ?>" />
-                                </svg>
-                            </td>
-
-                            <td class="mono col-price"><?= formatMoney($stock['price']) ?></td>
-                            <td class="mono <?= $var['class'] ?>"><?= ($stock['change_price'] >= 0 ? '+' : '') ?><?= formatMoney($stock['change_price']) ?></td>
-                            <td><span class="pct-pill <?= $var['class'] ?>"><?= $var['symbol'] ?>&thinsp;<?= $var['value'] ?>%</span></td>
-                            <td class="mono col-vol"><?= formatVolume($stock['volume']) ?></td>
-                            <td class="col-bar">
-                                <div class="bar-track"><div class="bar-fill <?= $var['class'] ?>" style="--w:<?= $barPct ?>%"></div></div>
-                                <span class="bar-pct"><?= $barPct ?>%</span>
-                            </td>
-                        </tr>
-                    <?php endforeach; ?>
+                    
+                    <tbody id="gainers" class="tab-content active">
+                        <?php renderTableRows($gainers); ?>
+                    </tbody>
+                    
+                    <tbody id="losers" class="tab-content">
+                        <?php renderTableRows($losers, true); ?>
                     </tbody>
                 </table>
             </div>
@@ -307,7 +341,7 @@ function generateSparkline($seed, $isPositive) {
                 <h4>Fontes de Dados</h4>
                 <ul>
                     <li><a href="https://brapi.dev" target="_blank" rel="noopener">Brapi API (Ações)</a></li>
-                    <li><a href="https://hgbrasil.com" target="_blank" rel="noopener">HG Brasil (Índices)</a></li>
+                    <li><a href="https://hgbrasil.com" target="_blank" rel="noopener">HG Brasil (Índices e Câmbio)</a></li>
                 </ul>
             </div>
             <div class="footer-links-col">
@@ -362,12 +396,11 @@ if (notifyBtn && "Notification" in window) {
         document.querySelectorAll('.table-row').forEach(row => {
             let pct = parseFloat(row.dataset.pct);
             let symbol = row.dataset.symbol.toUpperCase();
-            // Dispara notificação se a ação subiu mais de 5% (você pode mudar esse valor)
-            if (pct >= 5.0) {
-                // Usa sessionStorage para não floodar de notificações a cada F5
+            if (pct >= 5.0 || pct <= -5.0) { // Alerta para Altas ou Quedas fortes
                 if (!sessionStorage.getItem('notified_' + symbol)) {
-                    new Notification("🚀 " + symbol + " Disparou!", {
-                        body: "A ação está com " + pct + "% de alta. Verifique o painel.",
+                    const txt = pct > 0 ? "🚀 Disparou!" : "📉 Despencou!";
+                    new Notification(symbol + " " + txt, {
+                        body: "A ação está com " + pct + "% de variação.",
                         icon: row.dataset.logo || ""
                     });
                     sessionStorage.setItem('notified_' + symbol, 'true');
@@ -396,30 +429,47 @@ if (searchInput) {
 }
 
 // ═══════════════════════════════════════════════
-//  4. ORDENAÇÃO DINÂMICA
+//  4. TABS E ORDENAÇÃO DINÂMICA
 // ═══════════════════════════════════════════════
-const tbody = document.querySelector('#stocksTable tbody');
-const btns = document.querySelectorAll('.filter-btn[data-sort]');
+// Tabs Logic
+const tabBtns = document.querySelectorAll('.tab-btn[data-target]');
+const tabContents = document.querySelectorAll('.tab-content');
 
+tabBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+        tabBtns.forEach(b => b.classList.remove('active'));
+        tabContents.forEach(c => c.classList.remove('active'));
+        
+        btn.classList.add('active');
+        document.getElementById(btn.dataset.target).classList.add('active');
+    });
+});
+
+// Sort Logic
+const btns = document.querySelectorAll('.filter-btn[data-sort]');
 btns.forEach(btn => {
     btn.addEventListener('click', () => {
-        // Remove active class
         btns.forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
 
         const sortType = btn.dataset.sort;
-        const rows = Array.from(tbody.querySelectorAll('.table-row'));
+        
+        // Aplica a ordenação nas duas tabelas
+        ['gainers', 'losers'].forEach(tabId => {
+            const tbody = document.getElementById(tabId);
+            if (!tbody) return;
+            const rows = Array.from(tbody.querySelectorAll('.table-row'));
 
-        rows.sort((a, b) => {
-            let valA = parseFloat(a.dataset[sortType]);
-            let valB = parseFloat(b.dataset[sortType]);
-            
-            if (sortType === 'rank') return valA - valB; // Crescente (1, 2, 3...)
-            return valB - valA; // Decrescente para Preço e Volume
+            rows.sort((a, b) => {
+                let valA = parseFloat(a.dataset[sortType]);
+                let valB = parseFloat(b.dataset[sortType]);
+                
+                if (sortType === 'rank') return valA - valB; 
+                return valB - valA; 
+            });
+
+            rows.forEach(row => tbody.appendChild(row));
         });
-
-        // Re-apendando reordena automaticamente os nós na DOM
-        rows.forEach(row => tbody.appendChild(row));
     });
 });
 
