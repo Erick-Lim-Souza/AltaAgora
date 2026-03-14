@@ -5,7 +5,7 @@
 // ═══════════════════════════════════════════════════════
 require_once 'functions.php';
 
-// Novas chamadas separadas para Altas e Baixas
+// Chamadas separadas para Altas e Baixas
 $gainers        = getBrapiStocks('desc', 15);
 $losers         = getBrapiStocks('asc', 15);
 $hgData         = getHgData();
@@ -249,9 +249,28 @@ function renderTableRows($stocks, $isLosers = false) {
             <section class="indices-section" style="margin-bottom: 0;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px;">
                     <h3 class="section-label" style="margin-bottom: 0;">// câmbio oficial</h3>
-                    <span class="currency-source">Moeda Base: <strong>BRL (Real)</strong></span>
+                    <span class="currency-source">Mercado Global</span>
                 </div>
                 <div class="indices-grid">
+                    
+                    <?php 
+                        $usdBuy = $currencies['USD']['buy'] ?? 0;
+                        $eurBuy = $currencies['EUR']['buy'] ?? 0;
+                        $brlToUsd = $usdBuy > 0 ? (1 / $usdBuy) : 0;
+                        $brlToEur = $eurBuy > 0 ? (1 / $eurBuy) : 0;
+                    ?>
+                    <div class="index-card" style="grid-column: 1 / -1; border-color: rgba(0,255,163,.4); background: linear-gradient(145deg, rgba(0,255,163,.05), var(--bg-card-2)); display: flex; justify-content: space-between; align-items: center; padding: 16px;">
+                        <div>
+                            <span class="index-name" style="color: var(--accent); font-size: 0.75rem; font-weight: 700;">🇧🇷 Real Brasileiro (BRL)</span>
+                            <span class="index-points mono" style="font-size: 1.1rem; display: block; margin-top: 4px;">Moeda Base Nacional</span>
+                        </div>
+                        <div style="text-align: right; background: rgba(0,0,0,0.2); padding: 8px 12px; border-radius: 6px; border: 1px solid var(--border);">
+                            <span style="font-size: 0.65rem; color: var(--text-lo); text-transform: uppercase; display: block; margin-bottom: 4px;">Poder de Compra (1 BRL)</span>
+                            <span style="font-size: 0.75rem; color: var(--text-mid); font-family: var(--font-mono); display: block;">= US$ <?= number_format($brlToUsd, 4, ',', '.') ?></span>
+                            <span style="font-size: 0.75rem; color: var(--text-mid); font-family: var(--font-mono); display: block;">= € <?= number_format($brlToEur, 4, ',', '.') ?></span>
+                        </div>
+                    </div>
+
                     <?php 
                     $allowed = ['USD', 'EUR', 'GBP', 'CNY', 'RUB', 'BTC'];
                     foreach ($allowed as $curr):
@@ -265,6 +284,7 @@ function renderTableRows($stocks, $isLosers = false) {
                         <span class="index-var <?= $v['class'] ?>"><?= $v['html'] ?></span>
                     </div>
                     <?php endforeach; ?>
+                    
                 </div>
             </section>
             <?php endif; ?>
