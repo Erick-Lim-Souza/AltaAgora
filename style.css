@@ -364,3 +364,20 @@ body {
     .search-wrap { display: none; /* Ocultar no topbar mobile por espaço */ }
     .col-chart { display: none; }
 }
+ /* ═══════════════════════════════════════════════════════
+   MOEDAS E TABS (ALTAS/BAIXAS)
+   ═══════════════════════════════════════════════════════ */
+.currency-source { display: inline-block; font-family: var(--font-mono); font-size: 0.7rem; color: var(--text-lo); margin-bottom: 8px; border: 1px solid var(--border); padding: 2px 8px; border-radius: 4px; background: var(--bg-card-2); }
+.currency-name { font-size: 0.65rem; color: var(--text-mid); text-transform: uppercase; }
+
+/* Tabs Navigation */
+.table-tabs { display: flex; gap: 4px; background: var(--bg-card-2); padding: 4px; border-radius: var(--r-lg); border: 1px solid var(--border); }
+.tab-btn { background: transparent; border: none; padding: 8px 16px; border-radius: var(--r); font-family: var(--font-mono); font-size: 0.75rem; color: var(--text-mid); cursor: pointer; transition: all 0.2s; font-weight: 600; text-transform: uppercase; }
+.tab-btn:hover { color: var(--text-hi); }
+.tab-btn.active { background: var(--bg-card); color: var(--accent); box-shadow: 0 2px 8px rgba(0,0,0,0.2); }
+.tab-btn[data-target="losers"].active { color: var(--red); }
+
+/* Hide inactive table content */
+.tab-content { display: none; }
+.tab-content.active { display: block; animation: fade-in 0.3s ease; }
+@keyframes fade-in { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
