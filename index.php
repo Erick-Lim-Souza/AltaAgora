@@ -357,18 +357,19 @@ function renderTableRows($stocks, $isLosers = false) {
                 <span class="logo">Alta<span class="logo-accent">Agora</span><span class="logo-dot">.</span></span>
                 <p class="footer-desc">Terminal financeiro de alta performance desenvolvido para oferecer uma visão limpa, rápida e direta das maiores movimentações da bolsa brasileira.</p>
             </div>
-            <div class="footer-links-col">
+<div class="footer-links-col">
                 <h4>Fontes de Dados</h4>
                 <ul>
                     <li><a href="https://brapi.dev" target="_blank" rel="noopener">Brapi API (Ações)</a></li>
-                    <li><a href="https://hgbrasil.com" target="_blank" rel="noopener">HG Brasil (Índices e Câmbio)</a></li>
+                    <li><a href="https://hgbrasil.com" target="_blank" rel="noopener">HG Brasil (Índices)</a></li>
+                    <li><a href="https://www.b3.com.br" target="_blank" rel="noopener">B3 - Brasil Bolsa Balcão</a></li>
                 </ul>
             </div>
             <div class="footer-links-col">
                 <h4>Projeto</h4>
                 <ul>
                     <li><a href="https://github.com/Erick-Lim-Souza/AltaAgora" target="_blank" rel="noopener">Código Fonte (GitHub)</a></li>
-                    <li><a href="https://linkedin.com/in/erickdelimasouza" target="_blank" rel="noopener">Desenvolvedor</a></li>
+                    <li><a href="https://ericklima-dev.netlify.app/" target="_blank" rel="noopener">Desenvolvedor</a></li>
                 </ul>
             </div>
         </div>
