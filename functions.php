@@ -1,18 +1,14 @@
 <?php
 // ═══════════════════════════════════════════════════════
 //  AltaAgora — functions.php
-//  Multi-API: Brapi (Ações) + HG Brasil (Índices)
+//  Multi-API: Brapi (Ações) + HG Brasil (Índices & Moedas)
 // ═══════════════════════════════════════════════════════
 require_once 'config.php';
 
-/**
- * Função genérica para requisições com Tempo de Cache Específico
- */
 function fetchApi(string $url, string $cacheSufix, int $cacheTime): array {
     $cacheKey  = md5($url . $cacheSufix);
     $cacheFile = CACHE_DIR . $cacheKey . '.json';
 
-    // Valida Cache com base no tempo específico daquela API
     if (file_exists($cacheFile)) {
         $age = time() - filemtime($cacheFile);
         if ($age < $cacheTime) {
@@ -55,15 +51,13 @@ function fetchApi(string $url, string $cacheSufix, int $cacheTime): array {
 }
 
 /**
- * Retorna top ações em alta via BRAPI (Cache de 30min)
+ * Retorna ações da BRAPI baseadas na ordenação (desc = Altas, asc = Baixas)
  */
-function getTopGainers(int $limit = 15): array {
+function getBrapiStocks(string $order = 'desc', int $limit = 15): array {
     if (!BRAPI_KEY_SET) return [];
 
-    $url = BRAPI_BASE_URL . '/quote/list?sortBy=change&sortOrder=desc&limit=' . $limit . '&token=' . BRAPI_KEY;
-    
-    // Passando o tempo de cache exclusivo da Brapi
-    $data = fetchApi($url, 'brapi_top_gainers', CACHE_TIME_BRAPI);
+    $url = BRAPI_BASE_URL . '/quote/list?sortBy=change&sortOrder=' . $order . '&limit=' . $limit . '&token=' . BRAPI_KEY;
+    $data = fetchApi($url, 'brapi_stocks_' . $order, CACHE_TIME_BRAPI);
 
     if (isset($data['error']) || empty($data['stocks'])) return [];
 
@@ -89,31 +83,26 @@ function getTopGainers(int $limit = 15): array {
 }
 
 /**
- * Índices do mercado via HG BRASIL (Cache de 10min)
+ * Índices e Moedas do mercado via HG BRASIL
  */
-function getMarketIndices(): array {
+function getHgData(): array {
     if (!API_KEY_SET) return [];
     
-    $url = API_BASE_URL . '?fields=stocks&key=' . API_KEY;
+    // Removido o filtro "fields" para ele trazer Moedas e Índices na mesma chamada
+    $url = API_BASE_URL . '?key=' . API_KEY;
+    $data = fetchApi($url, 'hg_all_data', CACHE_TIME_HG);
     
-    // Passando o tempo de cache exclusivo da HG Brasil
-    $data = fetchApi($url, 'hg_indices', CACHE_TIME_HG);
-    
-    return $data['results']['stocks'] ?? [];
+    return $data['results'] ?? [];
 }
 
-/**
- * Cronômetro Frontend: Baseado no tempo da HG Brasil (o ciclo mais rápido)
- */
 function getSecondsUntilRefresh(): int {
     if (!API_KEY_SET) return PAGE_REFRESH;
-    $cacheFile = CACHE_DIR . md5(API_BASE_URL . '?fields=stocks&key=' . API_KEY . 'hg_indices') . '.json';
+    $cacheFile = CACHE_DIR . md5(API_BASE_URL . '?key=' . API_KEY . 'hg_all_data') . '.json';
     
     if (!file_exists($cacheFile)) return PAGE_REFRESH;
     
     $age = time() - filemtime($cacheFile);
-    $remaining = PAGE_REFRESH - $age;
-    return max(0, $remaining);
+    return max(0, PAGE_REFRESH - $age);
 }
 
 // ── Helpers ──────────────────────────────────────────────
