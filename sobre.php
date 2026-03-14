@@ -31,7 +31,6 @@ $lastUpdate = date('H:i:s');
         .tech-badge { background: var(--bg-card-2); border: 1px solid var(--border); padding: 8px 16px; border-radius: 99px; font-family: var(--font-mono); font-size: 0.8rem; color: var(--accent); }
         .about-section-title { font-family: var(--font-mono); font-size: 0.85rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-lo); margin: 48px 0 16px; border-bottom: 1px solid var(--border); padding-bottom: 8px; }
         
-        /* Herdado do index.php */
         .footer-premium { border-top: 1px solid var(--border); background: var(--bg-card); padding: 48px 5% 24px; margin-top: auto; font-size: 0.8rem; position: relative; z-index: 10; }
         .footer-premium-top { display: flex; flex-wrap: wrap; gap: 40px; justify-content: space-between; margin-bottom: 40px; max-width: 1200px; margin-inline: auto; }
         .footer-brand-col { flex: 1; min-width: 280px; max-width: 450px; }
@@ -47,6 +46,7 @@ $lastUpdate = date('H:i:s');
         .footer-disclaimer strong { color: var(--text-mid); }
         .footer-credits-wrap { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 16px; color: var(--text-mid); font-size: 0.75rem; }
         .footer-credits-wrap strong { color: var(--text-hi); }
+        @media (max-width: 768px) { .footer-premium-top { flex-direction: column; gap: 32px; } .footer-credits-wrap { flex-direction: column; text-align: center; justify-content: center; } }
     </style>
 </head>
 <body style="display: flex; flex-direction: column; min-height: 100vh;">
@@ -62,7 +62,7 @@ $lastUpdate = date('H:i:s');
     </div>
 
     <div class="topbar-right">
-        <a href="index.php" style="color: var(--text-mid); font-size: 0.8rem; margin-right: 16px; font-family: var(--font-mono); text-transform: uppercase;">← Voltar ao Terminal</a>
+        <a href="index.php" style="color: var(--text-mid); font-size: 0.8rem; margin-right: 16px; font-family: var(--font-mono); text-transform: uppercase; transition: color 0.2s;" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--text-mid)'">← Voltar ao Terminal</a>
         <span class="live-dot" title="Status Online"></span>
         <span class="update-time mono"><?= $lastUpdate ?></span>
         <span class="session-tag">SYSTEM_INFO</span>
@@ -84,12 +84,12 @@ $lastUpdate = date('H:i:s');
         O <strong>AltaAgora</strong> nasceu de uma necessidade clara: acompanhar a volatilidade do mercado financeiro brasileiro através de uma interface limpa, rápida e sem o ruído dos grandes portais de notícias. O foco aqui é puramente no <em>Data Feed</em>.
     </p>
     <p class="about-text">
-        Projetado como um terminal web híbrido, a aplicação compila os principais *gainers* (maiores altas) do pregão atual da <strong>B3 (Brasil Bolsa Balcão)</strong> em tempo real, entregando uma experiência *frictionless* tanto para investidores quanto para entusiastas do mercado de capitais.
+        Projetado como um terminal web híbrido, a aplicação compila os principais *gainers* e *losers* do pregão atual da <strong>B3 (Brasil Bolsa Balcão)</strong> em tempo real, além de monitorar o câmbio global, entregando uma experiência *frictionless* tanto para investidores quanto para entusiastas do mercado de capitais.
     </p>
 
     <h2 class="about-section-title">Arquitetura & Engenharia</h2>
     <p class="about-text">
-        Para garantir resiliência e evitar o temido <em>Single Point of Failure</em> (SPOF), o AltaAgora consome dados simultâneos de múltiplas fontes: a <strong>Brapi API</strong> alimenta o core de ações, enquanto a <strong>HG Brasil</strong> sustenta o ticker de índices globais.
+        Para garantir resiliência e evitar o temido <em>Single Point of Failure</em> (SPOF), o AltaAgora consome dados simultâneos de múltiplas fontes: a <strong>Brapi API</strong> alimenta o core de ações, enquanto a <strong>HG Brasil</strong> sustenta o ticker de índices globais e câmbio.
     </p>
     <p class="about-text">
         No backend, um sistema de *caching* inteligente gerencia o *rate limit* de cada API de forma independente, preservando cotas e garantindo tempo de resposta na casa dos milissegundos. Toda a infraestrutura é *containerizada* com Docker, aplicando rígidas políticas de CSP (Content Security Policy) e proteção de endpoints.
@@ -125,18 +125,22 @@ $lastUpdate = date('H:i:s');
             <ul>
                 <li><a href="https://brapi.dev" target="_blank" rel="noopener">Brapi API (Ações)</a></li>
                 <li><a href="https://hgbrasil.com" target="_blank" rel="noopener">HG Brasil (Índices)</a></li>
+                <li><a href="https://www.b3.com.br" target="_blank" rel="noopener">B3 - Brasil Bolsa Balcão</a></li>
             </ul>
         </div>
         <div class="footer-links-col">
             <h4>Projeto</h4>
             <ul>
                 <li><a href="https://github.com/Erick-Lim-Souza/AltaAgora" target="_blank" rel="noopener">Código Fonte (GitHub)</a></li>
-                <li><a href="https://linkedin.com/in/erickdelimasouza" target="_blank" rel="noopener">Desenvolvedor</a></li>
+                <li><a href="https://ericklima-dev.netlify.app/" target="_blank" rel="noopener">Desenvolvedor</a></li>
             </ul>
         </div>
     </div>
     <div class="footer-premium-bottom">
-        <div class="footer-credits-wrap" style="justify-content: center;">
+        <div class="footer-disclaimer">
+            <strong>Aviso Legal:</strong> Os dados e cotações exibidos neste portal são consumidos via APIs públicas de terceiros (Brapi e HG Brasil) e podem apresentar divergências ou atraso (delay). O AltaAgora tem caráter estritamente informativo. As informações aqui contidas não constituem recomendações de compra ou venda.
+        </div>
+        <div class="footer-credits-wrap">
             <span>&copy; <?= date('Y') ?> AltaAgora. Todos os direitos reservados.</span>
             <span>Criado por <strong>Erick de Lima Souza</strong> &middot; Green Monster Project</span>
         </div>
