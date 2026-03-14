@@ -253,7 +253,7 @@ function renderTableRows($stocks, $isLosers = false) {
                 </div>
                 <div class="indices-grid">
                     <?php 
-                    $allowed = ['USD', 'EUR', 'GBP', 'BTC'];
+                    $allowed = ['USD', 'EUR', 'GBP', 'CNY', 'RUB', 'BTC'];
                     foreach ($allowed as $curr):
                         if (!isset($currencies[$curr])) continue;
                         $c = $currencies[$curr];
