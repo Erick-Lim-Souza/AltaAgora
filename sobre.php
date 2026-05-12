@@ -61,7 +61,7 @@ $lastUpdate = date('H:i:s');
 
         <h2 class="about-section-title">Propósito</h2>
         <p class="about-text">
-            O <strong>AltaAgora</strong> é um terminal financeiro de alta performance desenvolvido para o ecossistema <strong>Green Monster Project</strong>. O foco é a democratização de dados do mercado brasileiro e global através de uma interface <i>frictionless</i>, limpa e extremamente rápida.
+            O <strong>AltaAgora</strong> é um terminal financeiro de alta performance desenvolvido pelo ecossistema <strong>Green Monster Project</strong>. O foco é a democratização de dados do mercado brasileiro e global através de uma interface <i>frictionless</i>, limpa e extremamente rápida.
         </p>
         <p class="about-text">
             Projetado como um hub híbrido, a plataforma consolida <strong>Ações da B3</strong>, <strong>Criptoativos</strong> e <strong>Índices Mundiais</strong> em uma única camada visual, eliminando o ruído informativo dos portais tradicionais.
