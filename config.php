@@ -73,7 +73,8 @@ define('CACHE_DIR',  __DIR__ . '/cache/');
 // Configs Específicas de Cache para cada API
 define('CACHE_TIME_HG', 900);        // 15 min para índices e câmbio (tranquilo para o limite de 400 req/dia da HG)
 define('CACHE_TIME_BRAPI', 600);     // 10 min para ações (atualiza no ritmo perfeito da B3)
-define('CACHE_TIME_COINGECKO', 300); // 5 min para Cripto (tempo menor, pois o mercado cripto é volátil)
+//define('CACHE_TIME_COINGECKO', 300); // 5 min para Cripto (tempo menor, pois o mercado cripto é volátil)
+define('CACHE_TIME_COINGECKO', 86400); // 24 horas para Cripto
 
 // Frontend recarrega a tela com base no timer da B3 (10 min)
 define('PAGE_REFRESH', 600); 
