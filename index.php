@@ -1,84 +1,76 @@
 <?php
 // ═══════════════════════════════════════════════════════
-//  AltaAgora — index.php
-//  Terminal Híbrido: Brapi (Ações) + HG Brasil (Índices e Moedas)
+//  AltaAgora Terminal — index.php
+//  Grupo Green Monster Project / by FinanIA
+//  v1.2.0 - Terminal Híbrido Completo (B3, Global & Cripto)
 // ═══════════════════════════════════════════════════════
 require_once 'functions.php';
 
-// Chamadas separadas para Altas e Baixas
-$gainers        = getBrapiStocks('desc', 15);
-$losers         = getBrapiStocks('asc', 15);
-$hgData         = getHgData();
-$indices        = $hgData['stocks'] ?? [];
-$currencies     = $hgData['currencies'] ?? [];
+// ── 1. Coleta de Dados Multi-API ────────────────────────
+$gainers = getBrapiStocks('desc', 15);
+$losers  = getBrapiStocks('asc', 15);
+$cryptos = getCryptoData();
+$hgData  = getHgData();
 
-$lastUpdate     = date('H:i:s');
-$hasError       = empty($gainers);
-$apiKeysMissing = (!API_KEY_SET || !BRAPI_KEY_SET);
-$secondsLeft    = getSecondsUntilRefresh();
+$indices    = $hgData['stocks'] ?? [];
+$currencies = $hgData['currencies'] ?? [];
+// Adicionando Minérios se disponíveis na API
+$minerals   = $hgData['minerals'] ?? []; 
 
-$topStock  = $hasError ? null : $gainers[0];
-$avgChange = $hasError ? 0 : array_sum(array_column($gainers, 'change_percent')) / max(1, count($gainers));
-$totalVol  = $hasError ? 0 : array_sum(array_column($gainers, 'volume'));
+$lastUpdate  = date('H:i:s');
+$secondsLeft = getSecondsUntilRefresh();
 
-// Gerador de minigráfico (Sparkline) procedural para portfólio
-function generateSparkline($seed, $isPositive) {
-    srand(crc32($seed) + date('z')); // Muda o desenho 1x por dia
+// ── 2. Processamento de Resumo (Hero) ────────────────────
+$topGainer = !empty($gainers) ? $gainers[0] : ['symbol' => '-', 'price' => 0];
+$topLoser  = !empty($losers)  ? $losers[0]  : ['symbol' => '-', 'price' => 0];
+$totalVol  = !empty($gainers) ? array_sum(array_column($gainers, 'volume')) : 0;
+
+/**
+ * Gerador de minigráfico (Sparkline) procedural
+ */
+function generateSparkline($seed, $change) {
+    $isPositive = $change >= 0;
+    srand(crc32($seed) + date('z'));
     $points = []; $y = 12;
     for ($x = 0; $x <= 60; $x += 10) {
-        $points[] = "$x,$y";
-        $y += rand(-6, 6);
-        $y = max(2, min(22, $y)); // Mantém dentro dos limites do SVG
+        $points[] = "$x,$y"; 
+        $y += rand(-6, 6); 
+        $y = max(2, min(22, $y));
     }
-    // Garante que a ponta final aponte pra cima ou pra baixo dependendo do fechamento
     $yLast = $isPositive ? rand(2, 8) : rand(16, 22);
     $points[count($points)-1] = "60,$yLast";
     return implode(" ", $points);
 }
 
-// Renderizador de linhas da tabela para evitar duplicar HTML nas abas
-function renderTableRows($stocks, $isLosers = false) {
-    $maxPct = max(array_map('abs', array_column($stocks, 'change_percent'))) ?: 1;
+/**
+ * Renderizador de Linhas da Tabela
+ */
+function renderTableRows($stocks) {
     foreach ($stocks as $i => $stock):
-        $var    = formatVariation($stock['change_percent']);
-        $barPct = round((abs($stock['change_percent']) / $maxPct) * 100);
-        $isPos  = $stock['change_percent'] >= 0;
+        $var = formatVariation($stock['change_percent']);
+        $trend = generateSparkline($stock['symbol'], $stock['change_percent']);
 ?>
-        <tr class="table-row" 
-            data-symbol="<?= strtolower($stock['symbol']) ?>" 
-            data-price="<?= $stock['price'] ?>" 
-            data-vol="<?= $stock['volume'] ?>" 
-            data-rank="<?= $i ?>"
-            data-pct="<?= $stock['change_percent'] ?>"
-            data-logo="<?= $stock['logo'] ?>"
-            style="--row-delay:<?= $i * 0.035 ?>s">
-            <td><span class="rank rank-<?= $i < 3 ? ($i + 1) : 'n' ?>"><?= $i + 1 ?></span></td>
+        <tr class="table-row" data-symbol="<?= strtolower($stock['symbol']) ?>">
+            <td><span class="rank accent"><?= $i + 1 ?></span></td>
             <td>
                 <div class="asset-cell">
-                    <?php if ($stock['logo']): ?>
-                    <img src="<?= h($stock['logo']) ?>" alt="" class="stock-logo" loading="lazy">
+                    <?php if (!empty($stock['logo'])): ?>
+                        <img src="<?= h($stock['logo']) ?>" alt="" class="stock-logo" loading="lazy">
                     <?php else: ?>
-                    <span class="stock-initials"><?= mb_substr($stock['symbol'], 0, 2) ?></span>
+                        <div style="width:32px; height:32px; background:var(--bg-card-2); border-radius:6px; display:flex; align-items:center; justify-content:center; font-size:10px; font-weight:bold;"><?= substr($stock['symbol'], 0, 2) ?></div>
                     <?php endif; ?>
                     <strong class="asset-ticker"><?= $stock['symbol'] ?></strong>
                 </div>
             </td>
             <td class="col-company"><?= $stock['name'] ?></td>
-            
             <td class="col-chart">
                 <svg class="sparkline-svg" viewBox="0 0 60 24">
-                    <polyline class="sparkline-line <?= $var['class'] ?>" points="<?= generateSparkline($stock['symbol'], $isPos) ?>" />
+                    <polyline class="sparkline-line <?= $var['class'] ?>" points="<?= $trend ?>" />
                 </svg>
             </td>
-
-            <td class="mono col-price"><?= formatMoney($stock['price']) ?></td>
-            <td class="mono <?= $var['class'] ?>"><?= ($stock['change_price'] >= 0 ? '+' : '') ?><?= formatMoney($stock['change_price']) ?></td>
-            <td><span class="pct-pill <?= $var['class'] ?>"><?= $var['symbol'] ?>&thinsp;<?= $var['value'] ?>%</span></td>
+            <td class="mono"><?= formatMoney($stock['price']) ?></td>
+            <td class="mono <?= $var['class'] ?>"><?= $var['html'] ?></td>
             <td class="mono col-vol"><?= formatVolume($stock['volume']) ?></td>
-            <td class="col-bar">
-                <div class="bar-track"><div class="bar-fill <?= $var['class'] ?>" style="--w:<?= $barPct ?>%"></div></div>
-                <span class="bar-pct"><?= $barPct ?>%</span>
-            </td>
         </tr>
 <?php 
     endforeach;
@@ -89,440 +81,216 @@ function renderTableRows($stocks, $isLosers = false) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="AltaAgora — Ações em alta e baixa do pregão B3 em tempo real.">
-    <meta name="robots" content="noindex, nofollow">
-    <title>AltaAgora · Mercado B3</title>
+    <title>AltaAgora Terminal · Grupo Green Monster Project</title>
     
     <link rel="manifest" href="manifest.json">
-    <meta name="theme-color" content="#050810">
-    <link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23050810'/%3E%3Ctext x='4' y='23' font-family='monospace' font-size='18' font-weight='700' fill='%2300ffa3'%3EA%3C/text%3E%3C/svg%3E">
+    <meta name="theme-color" content="#0A0F1C">
+    <link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230A0F1C'/%3E%3Ctext x='4' y='23' font-family='monospace' font-size='18' font-weight='700' fill='%2300E5FF'%3EA%3C/text%3E%3C/svg%3E">
     
     <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
-    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23050810'/%3E%3Ctext x='4' y='23' font-family='monospace' font-size='18' font-weight='700' fill='%2300ffa3'%3EA%3C/text%3E%3C/svg%3E">
+    <link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230A0F1C'/%3E%3Ctext x='4' y='23' font-family='monospace' font-size='18' font-weight='700' fill='%2300E5FF'%3EA%3C/text%3E%3C/svg%3E">
     <link rel="stylesheet" href="style.css">
-    
-    <style>
-        .footer-premium { border-top: 1px solid var(--border); background: var(--bg-card); padding: 48px 5% 24px; margin-top: 40px; font-size: 0.8rem; position: relative; z-index: 10; }
-        .footer-premium-top { display: flex; flex-wrap: wrap; gap: 40px; justify-content: space-between; margin-bottom: 40px; max-width: 1200px; margin-inline: auto; }
-        .footer-brand-col { flex: 1; min-width: 280px; max-width: 450px; }
-        .footer-desc { color: var(--text-mid); margin-top: 16px; line-height: 1.6; font-size: 0.85rem; }
-        .footer-links-col { min-width: 200px; }
-        .footer-links-col h4 { color: var(--text-lo); font-family: var(--font-mono); font-size: 0.75rem; letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 20px; }
-        .footer-links-col ul { list-style: none; display: flex; flex-direction: column; gap: 12px; }
-        .footer-links-col a { color: var(--text-mid); transition: color 0.2s; display: inline-flex; align-items: center; gap: 8px; }
-        .footer-links-col a::before { content: '›'; color: var(--accent); font-weight: 700; }
-        .footer-links-col a:hover { color: var(--accent); }
-        .footer-premium-bottom { max-width: 1200px; margin-inline: auto; border-top: 1px solid var(--border-bright); padding-top: 24px; }
-        .footer-disclaimer { color: var(--text-lo); font-size: 0.72rem; line-height: 1.6; margin-bottom: 24px; text-align: justify; }
-        .footer-disclaimer strong { color: var(--text-mid); }
-        .footer-credits-wrap { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 16px; color: var(--text-mid); font-size: 0.75rem; }
-        .footer-credits-wrap strong { color: var(--text-hi); }
-        @media (max-width: 768px) { .footer-premium-top { flex-direction: column; gap: 32px; } .footer-credits-wrap { flex-direction: column; text-align: center; justify-content: center; } }
-    </style>
 </head>
 <body>
 
-<div class="scanlines"  aria-hidden="true"></div>
-<div class="bg-grid"    aria-hidden="true"></div>
-<div class="orb orb-1"  aria-hidden="true"></div>
-<div class="orb orb-2"  aria-hidden="true"></div>
+<div class="scanlines" aria-hidden="true"></div>
 
 <div class="layout">
+    <div class="orb-1" aria-hidden="true"></div>
 
     <header class="topbar">
         <div class="topbar-left">
-            <span class="logo">Alta<span class="logo-accent">Agora</span><span class="logo-dot">.</span></span>
+            <a href="index.php" class="logo">Alta<span class="logo-accent">Agora</span><span class="logo-dot">.</span></a>
         </div>
-
-        <div class="topbar-center">
-            <?php if (!empty($indices)): ?>
-            <div class="ticker-wrap">
-                <div class="ticker">
-                    <?php
-                    for ($pass = 0; $pass < 2; $pass++):
-                    foreach ($indices as $idx => $d):
-                        $v = formatVariation((float)($d['variation'] ?? 0));
-                    ?>
-                    <span class="ticker-item">
-                        <span class="ticker-name"><?= h($d['name'] ?? $idx) ?></span>
-                        <span class="ticker-val mono"><?= number_format((float)($d['points'] ?? 0), 2, ',', '.') ?></span>
-                        <span class="ticker-var <?= $v['class'] ?>"><?= $v['symbol'] ?>&thinsp;<?= $v['value'] ?>%</span>
-                    </span>
-                    <?php endforeach; endfor; ?>
-                </div>
-            </div>
-            <?php endif; ?>
-        </div>
-
         <div class="topbar-right">
-            <a href="sobre.php" style="color: var(--text-mid); font-size: 0.75rem; margin-right: 16px; font-family: var(--font-mono); text-transform: uppercase; transition: color 0.2s;" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--text-mid)'">// Sobre o Projeto</a>
-
-            <div class="search-wrap">
-                <span style="color:var(--text-mid); margin-right:6px;">🔍</span>
-                <input type="text" id="searchInput" class="search-input" placeholder="Filtrar ticker..." autocomplete="off">
+            <div class="countdown-wrap" title="Próxima atualização">
+                <span class="countdown-timer mono" id="countdown"><?= sprintf('%02d:%02d', intdiv($secondsLeft, 60), $secondsLeft % 60) ?></span>
             </div>
-
-            <span class="live-dot" title="Dados ao vivo"></span>
+            <span class="live-dot"></span>
             <span class="update-time mono"><?= $lastUpdate ?></span>
-
-            <div class="countdown-wrap" title="Próxima atualização da tela">
-                <span class="countdown-label">REFRESH</span>
-                <span class="countdown-timer mono" id="countdown" data-seconds="<?= $secondsLeft ?>">
-                    <?= sprintf('%02d:%02d', intdiv($secondsLeft, 60), $secondsLeft % 60) ?>
-                </span>
-                <div class="countdown-bar">
-                    <div class="countdown-bar-fill" id="countdown-bar" style="--pct:<?= $secondsLeft > 0 ? round(($secondsLeft / PAGE_REFRESH) * 100) : 0 ?>%"></div>
-                </div>
-            </div>
+            <a href="sobre.php" style="color:var(--text-lo); text-decoration:none; font-size:11px; font-weight:800; letter-spacing:1px;">MANIFESTO</a>
         </div>
     </header>
 
     <main class="main-content">
-
-        <?php if ($apiKeysMissing): ?>
-        <div class="alert-banner alert-warning">
-            <span class="alert-icon">⚙</span>
-            <div>
-                <strong>Variáveis de ambiente incompletas.</strong>
-                <span>Defina <code>HG_API_KEY</code> e <code>BRAPI_KEY</code> no painel do Render.</span>
-            </div>
-        </div>
-        <?php endif; ?>
-
-        <section class="page-title">
-            <div class="page-title-inner">
-                <p class="page-eyebrow">// terminal financeiro híbrido</p>
-                <h1>Mercado <span class="accent">B3</span></h1>
-                <p class="page-subtitle">
-                    Painel do pregão atual &middot; Bolsa B3 · São Paulo<br>
-                    <span style="color:var(--text-lo); font-size: 0.8em; margin-top: 4px; display: inline-block;">
-                        Atualização: Índices/Moedas (<?= CACHE_TIME_HG / 60 ?>min) · Ações (<?= CACHE_TIME_BRAPI / 60 ?>min)
-                    </span>
-                    <button id="notifyBtn" class="filter-btn" style="margin-left:12px;">🔔 Alertas de Disparo</button>
-                </p>
-            </div>
-            <div class="title-line"></div>
-        </section>
-
-        <?php if ($hasError && !$apiKeysMissing): ?>
-        <div class="alert-banner alert-error">
-            <span class="alert-icon">⚠</span>
-            <p>Não foi possível carregar os dados das ações na B3. Verifique sua chave da Brapi ou tente novamente em instantes.</p>
-        </div>
-        <?php elseif (!$hasError): ?>
-
+        
         <div class="stat-grid">
-            <div class="stat-card stat-card--highlight" style="--delay:0s">
-                <div class="stat-label">▲ MAIOR ALTA</div>
-                <div class="stat-symbol"><?= $gainers[0]['symbol'] ?></div>
-                <div class="stat-price mono"><?= formatMoney($gainers[0]['price']) ?></div>
+            <div class="stat-card" style="border-color: rgba(0,255,163,0.15);">
+                <div class="stat-label">▲ MAIOR ALTA B3</div>
+                <div class="stat-symbol"><?= $topGainer['symbol'] ?></div>
+                <div class="stat-price mono"><?= formatMoney($topGainer['price']) ?></div>
             </div>
-            <div class="stat-card" style="--delay:.07s; border-color: rgba(255,74,107,.25);">
-                <div class="stat-label" style="color: var(--red);">▼ MAIOR QUEDA</div>
-                <div class="stat-symbol"><?= $losers[0]['symbol'] ?></div>
-                <div class="stat-price mono"><?= formatMoney($losers[0]['price']) ?></div>
+            <div class="stat-card" style="border-color: rgba(255,74,107,0.15);">
+                <div class="stat-label" style="color:var(--red)">▼ MAIOR QUEDA B3</div>
+                <div class="stat-symbol"><?= $topLoser['symbol'] ?></div>
+                <div class="stat-price mono"><?= formatMoney($topLoser['price']) ?></div>
             </div>
-            <div class="stat-card" style="--delay:.14s">
-                <div class="stat-label"># VOLUME ALTAS</div>
+            <div class="stat-card">
+                <div class="stat-label"># VOLUME TOP GAINERS</div>
                 <div class="stat-big mono"><?= formatVolume($totalVol) ?></div>
-                <div class="stat-sub">ações negociadas no Top 15</div>
             </div>
-            <div class="stat-card stat-card--countdown" style="--delay:.21s">
-                <div class="stat-label">↻ PRÓX. ATUALIZAÇÃO</div>
-                <div class="stat-big mono" id="countdown-card">
-                    <?= sprintf('%02d:%02d', intdiv($secondsLeft, 60), $secondsLeft % 60) ?>
-                </div>
-                <div class="stat-sub">segundos restantes</div>
-                <div class="progress-ring-wrap">
-                    <svg class="progress-ring" viewBox="0 0 44 44">
-                        <circle class="ring-bg" cx="22" cy="22" r="18" />
-                        <circle class="ring-fill" cx="22" cy="22" r="18" id="ring-fill" stroke-dasharray="113.1" stroke-dashoffset="<?= 113.1 - (113.1 * ($secondsLeft / PAGE_REFRESH)) ?>" />
-                    </svg>
-                </div>
+            <div class="stat-card">
+                <div class="stat-label">↻ AUTO-REFRESH</div>
+                <div class="stat-big mono" id="countdown-card"><?= sprintf('%02d:%02d', intdiv($secondsLeft, 60), $secondsLeft % 60) ?></div>
             </div>
         </div>
 
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 24px; margin-bottom: 28px;">
-            
-            <?php if (!empty($currencies) && isset($currencies['source'])): ?>
-            <section class="indices-section" style="margin-bottom: 0;">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px;">
-                    <h3 class="section-label" style="margin-bottom: 0;">// câmbio oficial</h3>
-                    <span class="currency-source">Mercado Global</span>
-                </div>
-                <div class="indices-grid">
-                    
-                    <?php 
-                        $usdBuy = $currencies['USD']['buy'] ?? 0;
-                        $eurBuy = $currencies['EUR']['buy'] ?? 0;
-                        $brlToUsd = $usdBuy > 0 ? (1 / $usdBuy) : 0;
-                        $brlToEur = $eurBuy > 0 ? (1 / $eurBuy) : 0;
-                    ?>
-                    <div class="index-card" style="grid-column: 1 / -1; border-color: rgba(0,255,163,.4); background: linear-gradient(145deg, rgba(0,255,163,.05), var(--bg-card-2)); display: flex; justify-content: space-between; align-items: center; padding: 16px;">
-                        <div>
-                            <span class="index-name" style="color: var(--accent); font-size: 0.75rem; font-weight: 700;">🇧🇷 Real Brasileiro (BRL)</span>
-                            <span class="index-points mono" style="font-size: 1.1rem; display: block; margin-top: 4px;">Moeda Base Nacional</span>
-                        </div>
-                        <div style="text-align: right; background: rgba(0,0,0,0.2); padding: 8px 12px; border-radius: 6px; border: 1px solid var(--border);">
-                            <span style="font-size: 0.65rem; color: var(--text-lo); text-transform: uppercase; display: block; margin-bottom: 4px;">Poder de Compra (1 BRL)</span>
-                            <span style="font-size: 0.75rem; color: var(--text-mid); font-family: var(--font-mono); display: block;">= US$ <?= number_format($brlToUsd, 4, ',', '.') ?></span>
-                            <span style="font-size: 0.75rem; color: var(--text-mid); font-family: var(--font-mono); display: block;">= € <?= number_format($brlToEur, 4, ',', '.') ?></span>
-                        </div>
-                    </div>
-
-                    <?php 
-                    $allowed = ['USD', 'EUR', 'GBP', 'CNY', 'RUB', 'BTC'];
-                    foreach ($allowed as $curr):
-                        if (!isset($currencies[$curr])) continue;
-                        $c = $currencies[$curr];
-                        $v = formatVariation((float)($c['variation'] ?? 0));
-                    ?>
-                    <div class="index-card">
-                        <span class="index-name"><?= h($c['name'] ?? $curr) ?> (<?= $curr ?>)</span>
-                        <span class="index-points mono">R$ <?= number_format((float)($c['buy'] ?? 0), 4, ',', '.') ?></span>
-                        <span class="index-var <?= $v['class'] ?>"><?= $v['html'] ?></span>
-                    </div>
-                    <?php endforeach; ?>
-                    
-                </div>
-            </section>
-            <?php endif; ?>
-
-            <?php if (!empty($indices)): ?>
-            <section class="indices-section" style="margin-bottom: 0;">
-                <h3 class="section-label" style="margin-bottom: 18px;">// índices globais</h3>
-                <div class="indices-grid">
-                    <?php foreach (array_slice($indices, 0, 4) as $idx => $d): $v = formatVariation((float)($d['variation'] ?? 0)); ?>
-                    <div class="index-card">
-                        <span class="index-name"><?= h($d['name'] ?? $idx) ?></span>
-                        <span class="index-points mono"><?= number_format((float)($d['points'] ?? 0), 2, ',', '.') ?></span>
-                        <span class="index-var <?= $v['class'] ?>"><?= $v['html'] ?></span>
-                    </div>
-                    <?php endforeach; ?>
-                </div>
-            </section>
-            <?php endif; ?>
+        <div class="asset-selector-wrap">
+            <div class="segmented-control">
+                <button class="segment-btn active" data-target="section-stocks">Ações</button>
+                <button class="segment-btn" data-target="section-indices">Índices & Moedas</button>
+                <button class="segment-btn" data-target="section-crypto">Criptoativos</button>
+            </div>
         </div>
 
-        <section class="table-section">
-            <div class="table-header" style="flex-wrap: wrap; gap: 16px;">
-                <div class="table-tabs">
-                    <button class="tab-btn active" data-target="gainers">Maiores Altas</button>
-                    <button class="tab-btn" data-target="losers">Maiores Quedas</button>
-                </div>
-                
-                <div class="table-controls">
-                    <span style="font-size: 0.7rem; color: var(--text-mid);">Ordenar por:</span>
-                    <button class="filter-btn active" data-sort="rank">Impacto</button>
-                    <button class="filter-btn" data-sort="price">Preço R$</button>
-                    <button class="filter-btn" data-sort="vol">Volume</button>
-                </div>
-            </div>
-
+        <div id="section-stocks" class="asset-section">
+            <h3 class="section-label">Top Performers B3</h3>
             <div class="table-wrap">
-                <table class="data-table" id="stocksTable">
+                <table class="data-table">
                     <thead>
                         <tr>
-                            <th>#</th>
-                            <th>Ativo</th>
-                            <th>Empresa</th>
-                            <th class="col-chart">Trend</th>
-                            <th>Preço</th>
-                            <th>Var R$</th>
-                            <th>Var %</th>
-                            <th>Volume</th>
-                            <th>Força</th>
+                            <th>#</th><th>Ativo</th><th class="col-company">Empresa</th><th class="col-chart">Trend</th><th>Preço</th><th>Variação</th><th class="col-vol">Volume</th>
                         </tr>
                     </thead>
-                    
-                    <tbody id="gainers" class="tab-content active">
+                    <tbody>
                         <?php renderTableRows($gainers); ?>
-                    </tbody>
-                    
-                    <tbody id="losers" class="tab-content">
-                        <?php renderTableRows($losers, true); ?>
+                        <?php renderTableRows($losers); ?>
                     </tbody>
                 </table>
             </div>
-        </section>
+        </div>
 
-        <?php endif; ?>
+        <div id="section-indices" class="asset-section hidden-section">
+            <h3 class="section-label">Câmbio e Bolsas Mundiais</h3>
+            <div class="indices-grid">
+                <?php 
+                $moedasPermitidas = ['USD', 'EUR', 'GBP', 'CNY', 'RUB'];
+                foreach ($moedasPermitidas as $m): 
+                    if (!isset($currencies[$m])) continue;
+                    $curr = $currencies[$m];
+                    $v = formatVariation((float)$curr['variation']);
+                ?>
+                <div class="index-card">
+                    <span class="index-name"><?= $curr['name'] ?> (<?= $m ?>)</span>
+                    <span class="index-points mono">R$ <?= number_format($curr['buy'], 4, ',', '.') ?></span>
+                    <span class="index-var <?= $v['class'] ?>"><?= $v['html'] ?></span>
+                </div>
+                <?php endforeach; ?>
+
+                <?php foreach ($indices as $key => $idx): 
+                    $v = formatVariation((float)$idx['variation']);
+                ?>
+                <div class="index-card">
+                    <span class="index-name"><?= $idx['name'] ?? $key ?></span>
+                    <span class="index-points mono"><?= number_format($idx['points'], 2, ',', '.') ?></span>
+                    <span class="index-var <?= $v['class'] ?>"><?= $v['html'] ?></span>
+                </div>
+                <?php endforeach; ?>
+            </div>
+        </div>
+
+        <div id="section-crypto" class="asset-section hidden-section">
+            <h3 class="section-label">Mercado Digital Global</h3>
+            <div class="indices-grid">
+                <?php if (!empty($cryptos)): 
+                    $map = [
+                        'bitcoin' => 'Bitcoin', 'ethereum' => 'Ethereum', 
+                        'solana' => 'Solana', 'tether' => 'Tether'
+                    ];
+                    foreach ($map as $id => $name):
+                        if (!isset($cryptos[$id])) continue;
+                        $c = $cryptos[$id];
+                        $v = formatVariation((float)$c['brl_24h_change']);
+                ?>
+                <div class="index-card">
+                    <span class="index-name"><?= $name ?></span>
+                    <span class="index-points mono">R$ <?= number_format($c['brl'], 2, ',', '.') ?></span>
+                    <span class="index-var <?= $v['class'] ?>"><?= $v['html'] ?></span>
+                </div>
+                <?php endforeach; endif; ?>
+            </div>
+        </div>
 
     </main>
 
-    <footer class="footer-premium">
-        <div class="footer-premium-top">
+    <footer class="footer-master">
+        <div class="footer-top">
             <div class="footer-brand-col">
-                <span class="logo">Alta<span class="logo-accent">Agora</span><span class="logo-dot">.</span></span>
-                <p class="footer-desc">Terminal financeiro de alta performance desenvolvido para oferecer uma visão limpa, rápida e direta das maiores movimentações da bolsa brasileira.</p>
+                <div class="footer-tagline">Inteligência de Dados</div>
+                <p class="footer-desc">
+                    Terminal financeiro de alta performance desenvolvido para o ecossistema <strong>Green Monster</strong>. 
+                    Focado em baixa latência e precisão analítica.
+                </p>
             </div>
-<div class="footer-links-col">
-                <h4>Fontes de Dados</h4>
+            <div class="footer-links-col">
+                <h4>Data Feeds</h4>
                 <ul>
-                    <li><a href="https://brapi.dev" target="_blank" rel="noopener">Brapi API (Ações)</a></li>
-                    <li><a href="https://hgbrasil.com" target="_blank" rel="noopener">HG Brasil (Índices)</a></li>
-                    <li><a href="https://www.b3.com.br" target="_blank" rel="noopener">B3 - Brasil Bolsa Balcão</a></li>
+                    <li><a href="https://brapi.dev" target="_blank">Brapi API (B3)</a></li>
+                    <li><a href="https://hgbrasil.com" target="_blank">HG Brasil (Global)</a></li>
+                    <li><a href="https://www.coingecko.com" target="_blank">CoinGecko (Cripto)</a></li>
                 </ul>
             </div>
             <div class="footer-links-col">
-                <h4>Projeto</h4>
+                <h4>Ecossistema</h4>
                 <ul>
-                    <li><a href="https://github.com/Erick-Lim-Souza/AltaAgora" target="_blank" rel="noopener">Código Fonte (GitHub)</a></li>
-                    <li><a href="https://erickanalytics.netlify.app/" target="_blank" rel="noopener">Desenvolvedor</a></li>
+                    <li><a href="https://github.com/Erick-Lim-Souza/AltaAgora">Código Fonte</a></li>
+                    <li><a href="https://erickanalytics.netlify.app/">Portefólio</a></li>
                 </ul>
             </div>
         </div>
-        <div class="footer-premium-bottom">
-            <div class="footer-disclaimer">
-                <strong>Aviso Legal:</strong> Os dados e cotações exibidos neste portal são consumidos via APIs públicas de terceiros (Brapi e HG Brasil) e podem apresentar divergências ou atraso (delay). O AltaAgora tem caráter estritamente informativo. As informações aqui contidas não constituem recomendações de compra ou venda.
-            </div>
-            <div class="footer-credits-wrap">
-                <span>&copy; <?= date('Y') ?> AltaAgora. Todos os direitos reservados.</span>
-                <span>Criado por <strong>Erick de Lima Souza</strong> &middot; Green Monster Project</span>
-            </div>
+        <div class="footer-bottom">
+            <span class="footer-by-finania">by <span>FinanIA</span> & Grupo Green Monster Project!</span>
+            <div class="footer-legal">© <?= date('Y') ?> AltaAgora Terminal · Uso Informativo</div>
         </div>
     </footer>
-
 </div>
 
 <script>
-// ═══════════════════════════════════════════════
-//  1. PWA REGISTRATION
-// ═══════════════════════════════════════════════
-if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-        navigator.serviceWorker.register('/sw.js').catch(err => console.log('SW falhou:', err));
-    });
-}
+// 1. Lógica do Seletor de Ativos (Tabs Segmentadas)
+const segmentBtns = document.querySelectorAll('.segment-btn');
+const assetSections = document.querySelectorAll('.asset-section');
 
-// ═══════════════════════════════════════════════
-//  2. SISTEMA DE NOTIFICAÇÕES (ALERTA > 5%)
-// ═══════════════════════════════════════════════
-const notifyBtn = document.getElementById('notifyBtn');
-if (notifyBtn && "Notification" in window) {
-    if (Notification.permission === "granted") notifyBtn.style.display = 'none';
-    
-    notifyBtn.addEventListener('click', () => {
-        Notification.requestPermission().then(permission => {
-            if (permission === "granted") {
-                notifyBtn.style.display = 'none';
-                new Notification("AltaAgora Alertas", { body: "Avisaremos se alguma ação disparar mais de 5%!", icon: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23050810'/%3E%3Ctext x='4' y='23' font-family='monospace' font-size='18' font-weight='700' fill='%2300ffa3'%3EA%3C/text%3E%3C/svg%3E" });
-            }
-        });
-    });
-
-    // Checa ações em tempo real
-    if (Notification.permission === "granted") {
-        document.querySelectorAll('.table-row').forEach(row => {
-            let pct = parseFloat(row.dataset.pct);
-            let symbol = row.dataset.symbol.toUpperCase();
-            if (pct >= 5.0 || pct <= -5.0) { // Alerta para Altas ou Quedas fortes
-                if (!sessionStorage.getItem('notified_' + symbol)) {
-                    const txt = pct > 0 ? "🚀 Disparou!" : "📉 Despencou!";
-                    new Notification(symbol + " " + txt, {
-                        body: "A ação está com " + pct + "% de variação.",
-                        icon: row.dataset.logo || ""
-                    });
-                    sessionStorage.setItem('notified_' + symbol, 'true');
-                }
-            }
-        });
-    }
-}
-
-// ═══════════════════════════════════════════════
-//  3. PESQUISA RÁPIDA (QUICK SEARCH)
-// ═══════════════════════════════════════════════
-const searchInput = document.getElementById('searchInput');
-if (searchInput) {
-    searchInput.addEventListener('input', (e) => {
-        const term = e.target.value.toLowerCase();
-        document.querySelectorAll('.table-row').forEach(row => {
-            const symbol = row.dataset.symbol;
-            if (symbol.includes(term)) {
-                row.classList.remove('hidden-row');
-            } else {
-                row.classList.add('hidden-row');
-            }
-        });
-    });
-}
-
-// ═══════════════════════════════════════════════
-//  4. TABS E ORDENAÇÃO DINÂMICA
-// ═══════════════════════════════════════════════
-// Tabs Logic
-const tabBtns = document.querySelectorAll('.tab-btn[data-target]');
-const tabContents = document.querySelectorAll('.tab-content');
-
-tabBtns.forEach(btn => {
+segmentBtns.forEach(btn => {
     btn.addEventListener('click', () => {
-        tabBtns.forEach(b => b.classList.remove('active'));
-        tabContents.forEach(c => c.classList.remove('active'));
-        
-        btn.classList.add('active');
-        document.getElementById(btn.dataset.target).classList.add('active');
-    });
-});
-
-// Sort Logic
-const btns = document.querySelectorAll('.filter-btn[data-sort]');
-btns.forEach(btn => {
-    btn.addEventListener('click', () => {
-        btns.forEach(b => b.classList.remove('active'));
+        // Altera botões
+        segmentBtns.forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
 
-        const sortType = btn.dataset.sort;
-        
-        // Aplica a ordenação nas duas tabelas
-        ['gainers', 'losers'].forEach(tabId => {
-            const tbody = document.getElementById(tabId);
-            if (!tbody) return;
-            const rows = Array.from(tbody.querySelectorAll('.table-row'));
-
-            rows.sort((a, b) => {
-                let valA = parseFloat(a.dataset[sortType]);
-                let valB = parseFloat(b.dataset[sortType]);
-                
-                if (sortType === 'rank') return valA - valB; 
-                return valB - valA; 
-            });
-
-            rows.forEach(row => tbody.appendChild(row));
+        // Altera seções
+        const targetId = btn.getAttribute('data-target');
+        assetSections.forEach(section => {
+            section.classList.add('hidden-section');
+            if (section.id === targetId) section.classList.remove('hidden-section');
         });
     });
 });
 
-// ═══════════════════════════════════════════════
-//  5. COUNTDOWN DE REFRESH
-// ═══════════════════════════════════════════════
+// 2. Countdown de Refresh
 (function () {
-    const TOTAL = <?= PAGE_REFRESH ?>;
     let remaining = <?= $secondsLeft ?>;
-    const elTopbar = document.getElementById('countdown'), elCard = document.getElementById('countdown-card'), elBar = document.getElementById('countdown-bar'), elRing = document.getElementById('ring-fill');
-    const CIRCUMF = 113.1;
-    function pad(n) { return String(n).padStart(2, '0'); }
-    function fmt(s) { return pad(Math.floor(s / 60)) + ':' + pad(s % 60); }
+    const el = document.getElementById('countdown');
+    const elCard = document.getElementById('countdown-card');
+
     function update() {
         if (remaining <= 0) { location.reload(); return; }
-        const display = fmt(remaining);
-        if (elTopbar) elTopbar.textContent = display;
-        if (elCard) elCard.textContent = display;
-        if (elBar) elBar.style.setProperty('--pct', Math.round((remaining / TOTAL) * 100) + '%');
-        if (elRing) elRing.style.strokeDashoffset = (CIRCUMF - (CIRCUMF * (remaining / TOTAL))).toFixed(2);
-        const urgency = remaining <= 30;
-        [elTopbar, elCard].forEach(el => { if (el) el.classList.toggle('countdown-urgent', urgency); });
+        const m = Math.floor(remaining / 60);
+        const s = remaining % 60;
+        const display = String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
+        if(el) el.textContent = display;
+        if(elCard) elCard.textContent = display;
         remaining--;
     }
-    update(); setInterval(update, 1000);
+    update();
+    setInterval(update, 1000);
 })();
 
-// Hover Highlights
-document.querySelectorAll('.table-row').forEach(row => {
-    row.addEventListener('mouseenter', () => row.classList.add('row-hl'));
-    row.addEventListener('mouseleave', () => row.classList.remove('row-hl'));
-});
+// 3. PWA Registration
+if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js').catch(err => console.log('SW erro:', err));
+    });
+}
 </script>
 </body>
 </html>
